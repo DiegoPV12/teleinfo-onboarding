@@ -1,0 +1,25 @@
+/* Sistema de diseño · Teleinfo Onboarding */
+:root {
+  --paper: #FFFFFF;
+  --ink: #000000;
+  --ink-2: #6E6E73;
+  --ink-3: #AEAEB2;
+  --hair: #E6E6E9;
+
+  --c-nombre: #007AFF;
+  --c-apellido: #5856D6;
+  --c-empresa: #AF52DE;
+  --c-cargo: #FF2D55;
+  --c-telefono: #FF9500;
+  --c-email: #34C759;
+
+  --ai: linear-gradient(90deg, #007AFF 0%, #5856D6 20%, #AF52DE 40%, #FF2D55 60%, #FF9500 80%, #34C759 100%);
+  --ai-loop: linear-gradient(90deg, #007AFF, #5856D6, #AF52DE, #FF2D55, #FF9500, #34C759, #30D9C8, #007AFF);
+
+  --track-w: min(620px, 80vw);
+  --ease: cubic-bezier(.22, 1, .36, 1);
+
+
+  --font: "Neue Haas Grotesk Display Pro", "NeueHaasDisplay", "Neue Haas Grotesk Text Pro",
+          "Helvetica Neue", "Inter", Helvetica, Arial, sans-serif;
+}

@@ -1,0 +1,12 @@
+@font-face {
+  font-family: "NeueHaasDisplay";
+  src: url("/fonts/NeueHaasDisplay-Roman.otf") format("opentype");
+  font-weight: 400;
+  font-display: swap;
+}
+@font-face {
+  font-family: "NeueHaasDisplay";
+  src: url("/fonts/NeueHaasDisplay-Medium.otf") format("opentype");
+  font-weight: 500;
+  font-display: swap;
+}
