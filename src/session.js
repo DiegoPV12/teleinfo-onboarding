@@ -72,10 +72,34 @@ export function createSession({ onScene, onStatus } = {}) {
     adopted = false;
     absent = 0;
     creating = null;
+    notifiedStep = null;
     clearTimeout(flushTimer);
     clearTimeout(abandonTimer);
     store.clear();
     settle();
+  }
+
+  /**
+   * Avisa al tótem qué paso se está mostrando, cada vez que cambia — al
+   * aterrizar en el primero (detección o slider), al avanzar y al volver
+   * atrás. Se dedupe contra el último avisado para no repetir el mismo paso
+   * en cada sondeo.
+   */
+  let notifiedStep = null;
+  function announceStep() {
+    const current = store.currentStep();
+    if (!current || current.id === notifiedStep) return;
+    notifiedStep = current.id;
+    client.notifyStep(current.id).then((delivered) => {
+      if (delivered === false) {
+        log.change('totem-event', 'sin-uuid-o-token', () =>
+          log.poll('aviso «paso actualizado»: falta VITE_TOTEM_UUID o VITE_API_TOKEN'));
+      } else if (delivered === 0) {
+        log.poll(`aviso «paso actualizado» → ${current.id}: encolado, tótem sin conexión abierta`);
+      } else {
+        log.ok(`aviso «paso actualizado» → ${current.id}: entregado a ${delivered} conexión(es)`);
+      }
+    }).catch(() => {});
   }
 
   /**
@@ -183,6 +207,7 @@ export function createSession({ onScene, onStatus } = {}) {
     store.applySnapshot(state);
     settle();
     bumpActivity();   // el avatar dictando o tomando fotos también es actividad
+    announceStep();   // puede ser el aterrizaje en el paso 1 recién detectada
   }
 
   /**
@@ -326,6 +351,7 @@ export function createSession({ onScene, onStatus } = {}) {
       log.session('entrada a mano por el slider');
       settle();
       bumpActivity();
+      announceStep();
       return true;
     },
 
@@ -356,20 +382,12 @@ export function createSession({ onScene, onStatus } = {}) {
         store.markStepVerified(id);
         log.ok(`paso ${id} guardado`);
 
-        // Aviso «paso completado». Sin ruta confirmada todavía: si falla, se
-        // dice una vez y no se le arruina el avance al visitante por esto.
-        client.notifyStep(personKey, id).then((sent) => {
-          if (!sent) {
-            log.change('step-event', 'sin-ruta', () =>
-              log.poll('aviso de paso completado: la central no tiene esa ruta todavía'));
-          }
-        }).catch(() => {});
-
         // Último paso: el registro queda encolado para imprimir la credencial.
         if (!store.currentStep()) await complete(personKey);
 
         settle();
         bumpActivity();
+        announceStep();   // el paso que se muestra ahora cambió (o se acabó)
         poller.kick();
         return true;
       } catch (err) {
@@ -388,6 +406,7 @@ export function createSession({ onScene, onStatus } = {}) {
       log.form(`vuelve al paso ${previous.id}`);
       settle();
       bumpActivity();
+      announceStep();
       return true;
     },
 

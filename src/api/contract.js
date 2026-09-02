@@ -196,33 +196,40 @@ export function finishPayload() {
 }
 
 /**
- * Aviso «paso completado». TODAVÍA NO HAY ENDPOINT REAL — esto es la forma,
- * a la espera de que confirmen la ruta y el nombre exacto de los campos.
+ * Aviso en tiempo real al tótem: «el formulario está mostrando tal paso».
+ * `POST /api/totems/{totem_id}/events` — sube por HTTP, baja al tótem por
+ * WebSocket. Pide token. No hay confirmación de que el tótem lo haya
+ * procesado, solo de que se encoló (`delivered` en la respuesta puede ser 0
+ * sin que sea un error: el tótem puede no tener conexión abierta ahora
+ * mismo). NO CRÍTICO por diseño explícito del backend: nunca debe frenar el
+ * registro si falla o si nadie lo recibe.
  *
- * La pieza importante: se identifica el paso por su ID DE TEXTO
- * ('identity' | 'work' | 'contact' | 'photos', ver steps.js), nunca por su
- * posición numérica. Si el día de mañana se agrega un paso, se quita uno o
- * se reordenan, el id de cada paso no cambia — solo su lugar en la lista.
- * Mandar "paso 2" se rompería con ese cambio; mandar "work" no.
- *
- * Se manda además `total` y `index` (posición actual, 0-based) como
- * información de contexto — útil para logs o UI del lado del backend — pero
- * nunca como la clave para identificar de cuál paso se trata.
+ * `data` no tiene esquema fijo del lado del servidor — lo arma quien emite.
+ * Van dos formas del paso, porque no está escrito en ningún lado cuál espera
+ * el tótem y las dos cuestan lo mismo:
+ *   step     → posición humana, 1-based (así lo mostró el ejemplo del
+ *              backend: {"step": 2}). ASUNCIÓN A CONFIRMAR.
+ *   step_id  → el id estable ('identity' | 'work' | 'contact' | 'photos',
+ *              ver steps.js), que no cambia si el día de mañana se
+ *              reordenan o se agregan pasos — el mismo criterio que ya se
+ *              usa en el resto de la pantalla para no depender de la
+ *              posición.
  */
-export function stepEventPayload(stepId, personId) {
+export function stepEventPayload(stepId, totemCode) {
   const at = STEP_IDS.indexOf(stepId);
   return {
-    person_id: personId,
-    step: stepId,                 // identificador estable — lo que importa
-    step_index: at,                // contexto: posición actual (puede cambiar)
-    step_count: STEP_IDS.length,   // contexto: cuántos pasos hay ahora
-    completed_at: new Date().toISOString()
+    event: 'step.updated',
+    data: {
+      code: totemCode,   // totems.code — a qué tótem va dirigido
+      step: at + 1,
+      step_id: stepId
+    }
   };
 }
 
-/** Ruta del aviso de paso. Ajustar en cuanto la confirmen. */
-export const stepEventPath = (personId) =>
-  `/api/persons/${encodeURIComponent(personId)}/steps`;
+/** Ruta del aviso. Lleva el UUID de `totems.id`, NO el `code`. */
+export const stepEventPath = (totemId) =>
+  `/api/totems/${encodeURIComponent(totemId)}/events`;
 
 /** Los campos de un paso, listos para PATCH. */
 export function stepPayload(stepId, read) {

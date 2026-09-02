@@ -78,12 +78,16 @@ function build() {
       return { status: 200, body: { items: person.photos, total: person.photos.length } };
     },
 
-    /** PATCH parcial: lo omitido no se toca, el string vacío borra. */
-    /** Aviso «paso completado». En local solo se registra. */
-    async notifyStep(personId, body) {
-      if (!people.has(personId)) return { status: 404, body: { detail: 'Persona no encontrada.' } };
-      return { status: 200, body: { ok: true, ...body } };
+    /**
+     * Aviso «paso actualizado» al tótem. En local no hay tótem al que
+     * avisarle: se limita a devolver `delivered: 0`, como haría la central
+     * real con un tótem sin conexiones abiertas.
+     */
+    async notifyStep() {
+      return { status: 200, body: { delivered: 0 } };
     },
+
+    /** PATCH parcial: lo omitido no se toca, el string vacío borra. */
 
     async patchPerson(personId, body) {
       const person = people.get(personId);

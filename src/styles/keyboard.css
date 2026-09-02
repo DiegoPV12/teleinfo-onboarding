@@ -1,10 +1,7 @@
 /* ------------------------------------------------------------------
    TECLADO EN PANTALLA
    ------------------------------------------------------------------
-   Estética de iPad: fondo gris translúcido, teclas blancas con una sola
-   sombra dura debajo, esquinas de 8px y tipografía regular. Se escriben
-   los estilos completos en vez de importar los de simple-keyboard: son
-   cuatro reglas y así no hay que pelearse con sus valores por defecto. */
+*/
 
 :root {
   /* Alto del teclado. Es la referencia para subir el contenido. */
@@ -110,16 +107,16 @@
 
 /* Proporciones de iPad: la barra espaciadora manda, los modificadores
    son algo más anchos que una letra. */
-.kb .hg-button-space { flex: 5; }
-.kb .hg-button-shift,
-.kb .hg-button-bksp { flex: 1.6; }
-.kb .hg-button-numbers,
-.kb .hg-button-abc,
-.kb .hg-button-more { flex: 1.4; }
-.kb .hg-button-enter { flex: 2.2; background: #007AFF; color: #fff; }
-.kb .hg-button-enter.hg-activeButton,
-.kb .hg-button-enter:active { background: #0062CC; }
-.kb .kb-wide { flex: 1.6; font-size: clamp(14px, 1.8vh, 17px); }
+.kb .hg-button[data-skbtn="{space}"] { flex: 5; }
+.kb .hg-button[data-skbtn="{shift}"],
+.kb .hg-button[data-skbtn="{bksp}"] { flex: 1.6; }
+.kb .hg-button[data-skbtn="{numbers}"],
+.kb .hg-button[data-skbtn="{abc}"],
+.kb .hg-button[data-skbtn="{more}"] { flex: 1.4; }
+.kb .hg-button[data-skbtn="{enter}"] { flex: 2.2; background: #007AFF; color: #fff; }
+.kb .hg-button[data-skbtn="{enter}"].hg-activeButton,
+.kb .hg-button[data-skbtn="{enter}"]:active { background: #0062CC; }
+.kb .hg-button[data-skbtn=".com"] { flex: 1.6; font-size: clamp(14px, 1.8vh, 17px); }
 
 /* La segunda fila va sangrada, como en el teclado real. */
 .kb .hg-row:nth-child(2) { padding: 0 calc(var(--kb-key-h) * .28); }
@@ -139,9 +136,15 @@
 
 /* --------------------------------------------- el contenido se hace a un lado */
 
-/* El escenario es `position: fixed; inset: 0`, así que basta con subirle el
-   borde inferior: la escena reparte de nuevo cabecera, campos y botones en el
-   alto que queda. Es mejor que desplazarla, porque «Verificar» sigue estando
-   a mano sin quedar tapado por el teclado. */
-.stage { transition: bottom .34s var(--ease); }
-body.kb-open .stage { bottom: var(--kb-h); }
+/* El teclado tapa el bajo de la pantalla: se sube la escena en vez de
+   dejar que los campos queden debajo. */
+body.kb-open .stage {
+  transform: translateY(calc(var(--kb-h) * -.34));
+  transition: transform .34s var(--ease);
+}
+.stage { transition: transform .34s var(--ease); }
+
+/* Con el teclado abierto los botones del pie no se pueden alcanzar y
+   además compiten con la tecla azul: se apagan. */
+body.kb-open .scene[data-scene="step"] .foot { opacity: 0; pointer-events: none; }
+.scene[data-scene="step"] .foot { transition: opacity .2s linear; }

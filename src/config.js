@@ -7,8 +7,8 @@
 const ENV = import.meta.env ?? globalThis.process?.env ?? {};
 
 /**
- * El tótem-avatar se identifica en la URL de esta pantalla:
- *   ?totem=<id>   ·   /t/<id>   ·   /totem/<id>
+ * El tótem-avatar se identifica en la URL de esta pantalla con su CODE:
+ *   ?totem=<code>   ·   /t/<code>   ·   /totem/<code>
  * La variable de entorno queda como respaldo para desarrollo.
  */
 function totemFromUrl() {
@@ -55,11 +55,7 @@ export const TIMING = {
   editDebounce: Number(ENV.VITE_EDIT_DEBOUNCE_MS ?? 400),
   idleReset: Number(ENV.VITE_IDLE_RESET_MS ?? 14000),
   /**
-   * Sin actividad en el formulario (nada escrito, ningún paso verificado)
-   * durante este tiempo, el registro se da por abandonado y la pantalla
-   * vuelve sola a la bienvenida. Reemplaza a la vieja detección por ausencia
-   * del tótem: esa medía si el avatar seguía viendo a la persona; esta mide
-   * si sigue pasando algo en el formulario, que es lo que de verdad importa.
+   * Sin actividad en el formulario 
    */
   abandonMs: Number(ENV.VITE_ABANDON_MS ?? 30000)
 };
@@ -67,21 +63,25 @@ export const TIMING = {
 export const API = {
   base: (ENV.VITE_API_BASE ?? '').replace(/\/$/, ''),
   /**
-   * Token de la central. Desde el commit 8fb6661 la escritura es pública
-   * (`POST /api/persons`, `PATCH /api/persons/{id}`) y también lo es
-   * `GET /api/totems/{id}/current-person`. Siguen pidiendo sesión
-   * `GET /api/persons/{id}` y el listado y la lectura de fotos, así que sin
-   * token esas dos cosas no se pueden hacer.
+   * Token de la central. 
    */
   token: ENV.VITE_API_TOKEN ?? '',
   /**
    * Identifica al totem-avatar; viaja en la URL de esta pantalla. Es el CODE
    * legible del tótem (ej. "totem-01"), no el UUID interno de `totems.id`:
-   * se consulta contra `GET /api/totems/by-code/{code}/current-person`.
+   * se consulta contra `GET /api/totems/by-code/{code}/current-person` y va
+   * en `data.code` del aviso de paso.
    */
-  totem: totemFromUrl() || (ENV.VITE_TOTEM_ID ?? ''),
+  totem: totemFromUrl() || (ENV.VITE_TOTEM_CODE ?? ''),
+  /**
+   * El UUID de `totems.id` — DISTINTO del `code` de arriba; la propia doc
+   * del backend avisa de no confundirlos. Hoy solo lo pide una ruta:
+   * `POST /api/totems/{totem_id}/events`, el aviso de «paso actualizado».
+   * No viaja en la URL de esta pantalla (el atajo del kiosco usa el code,
+   * que es lo que se puede escribir a mano); se configura aparte.
+   */
+  totemId: ENV.VITE_TOTEM_UUID ?? '',
   pollMs: Number(ENV.VITE_POLL_MS ?? 1500),
-  /** Prefijo por defecto: la central exige phone_prefix y phone_number aparte. */
   phonePrefix: ENV.VITE_PHONE_PREFIX ?? '+591'
 };
 

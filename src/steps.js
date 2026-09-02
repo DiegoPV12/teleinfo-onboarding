@@ -1,9 +1,7 @@
 import { FIELDS } from './config.js';
 
 /**
- * Los cuatro pasos del registro. El flujo es estricto: no se avanza al
- * siguiente hasta que el actual queda verificado (por la tablet o por el
- * avatar). `optional` permite verificar un paso con campos vacíos.
+ * Los cuatro pasos del registro.
  */
 export const STEPS = [
   {

@@ -93,9 +93,9 @@ export function createHttpTransport() {
     patchPerson: (personId, body) =>
       send(`/api/persons/${personId}`, { method: 'PATCH', body }),
 
-    /** Aviso «paso completado». Ruta y forma sin confirmar todavía. */
-    notifyStep: (personId, body) =>
-      send(stepEventPath(personId), { method: 'POST', body }),
+    /** Aviso «paso actualizado» al tótem. Pide token; ver contract.js. */
+    notifyStep: (totemId, body) =>
+      send(stepEventPath(totemId), { method: 'POST', body }),
 
     createPerson: ({ path, body, idempotent }) =>
       send(path, {

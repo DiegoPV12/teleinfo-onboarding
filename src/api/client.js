@@ -1,4 +1,4 @@
-import { TRANSPORT } from '../config.js';
+import { API, TRANSPORT } from '../config.js';
 import { log } from '../log.js';
 import { createHttpTransport } from './http.js';
 import { createLocalTransport } from './local.js';
@@ -109,14 +109,13 @@ export function createClient({ transport = TRANSPORT } = {}) {
     },
 
     /**
-     * Avisa que un paso se completó. NO CRÍTICO: si la ruta todavía no existe
-     * o falla, no debe frenar el registro — el visitante ya avanzó de paso y
-     * ese avance vive en el store local pase lo que pase con este aviso.
-     * Por eso no usa `ok()` (que lanza en >=400): decide ella misma.
+     * Avisa al tótem qué paso se está mostrando ahora
      */
-    async notifyStep(personId, stepId) {
-      const res = await t.notifyStep(personId, stepEventPayload(stepId, personId));
-      return res.status < 400;
+    async notifyStep(stepId) {
+      if (!API.totemId) return false;
+      const res = await t.notifyStep(API.totemId, stepEventPayload(stepId, API.totem));
+      if (res.status >= 400) return false;
+      return res.body?.delivered ?? 0;
     },
 
     photoUrl: (personId, sampleId) => t.photoUrl(personId, sampleId),
