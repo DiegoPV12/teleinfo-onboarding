@@ -1,5 +1,5 @@
 import { API, FIELDS } from '../config.js';
-import { fieldsOf, STEP_IDS } from '../steps.js';
+import { fieldsOf } from '../steps.js';
 import { log } from '../log.js';
 
 /**
@@ -196,40 +196,12 @@ export function finishPayload() {
 }
 
 /**
- * Aviso en tiempo real al tótem: «el formulario está mostrando tal paso».
- * `POST /api/totems/{totem_id}/events` — sube por HTTP, baja al tótem por
- * WebSocket. Pide token. No hay confirmación de que el tótem lo haya
- * procesado, solo de que se encoló (`delivered` en la respuesta puede ser 0
- * sin que sea un error: el tótem puede no tener conexión abierta ahora
- * mismo). NO CRÍTICO por diseño explícito del backend: nunca debe frenar el
- * registro si falla o si nadie lo recibe.
- *
- * `data` no tiene esquema fijo del lado del servidor — lo arma quien emite.
- * Van dos formas del paso, porque no está escrito en ningún lado cuál espera
- * el tótem y las dos cuestan lo mismo:
- *   step     → posición humana, 1-based (así lo mostró el ejemplo del
- *              backend: {"step": 2}). ASUNCIÓN A CONFIRMAR.
- *   step_id  → el id estable ('identity' | 'work' | 'contact' | 'photos',
- *              ver steps.js), que no cambia si el día de mañana se
- *              reordenan o se agregan pasos — el mismo criterio que ya se
- *              usa en el resto de la pantalla para no depender de la
- *              posición.
+ * Siguiente audio pendiente del tótem. `POST /api/audios-totem/by-code/{code}/next`
+ * sin cuerpo ni query: el code viaja en la ruta. Un `404` es la respuesta
+ * normal cuando la cola está vacía (o el code no existe), no un error.
  */
-export function stepEventPayload(stepId, totemCode) {
-  const at = STEP_IDS.indexOf(stepId);
-  return {
-    event: 'step.updated',
-    data: {
-      code: totemCode,   // totems.code — a qué tótem va dirigido
-      step: at + 1,
-      step_id: stepId
-    }
-  };
-}
-
-/** Ruta del aviso. Lleva el UUID de `totems.id`, NO el `code`. */
-export const stepEventPath = (totemId) =>
-  `/api/totems/${encodeURIComponent(totemId)}/events`;
+export const nextAudioPath = (totemCode) =>
+  `/api/audios-totem/by-code/${encodeURIComponent(totemCode)}/next`;
 
 /** Los campos de un paso, listos para PATCH. */
 export function stepPayload(stepId, read) {

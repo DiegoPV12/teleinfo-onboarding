@@ -1,6 +1,6 @@
 import { API } from '../config.js';
 import { log } from '../log.js';
-import { currentPersonPath, stepEventPath } from './contract.js';
+import { currentPersonPath, nextAudioPath } from './contract.js';
 
 /**
  * Transporte real contra la central (rt-face-recognition).
@@ -93,9 +93,8 @@ export function createHttpTransport() {
     patchPerson: (personId, body) =>
       send(`/api/persons/${personId}`, { method: 'PATCH', body }),
 
-    /** Aviso «paso actualizado» al tótem. Pide token; ver contract.js. */
-    notifyStep: (totemId, body) =>
-      send(stepEventPath(totemId), { method: 'POST', body }),
+    notifyStep: (totemCode) =>
+      send(nextAudioPath(totemCode), { method: 'POST', quiet: true }),
 
     createPerson: ({ path, body, idempotent }) =>
       send(path, {

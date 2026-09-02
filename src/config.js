@@ -73,14 +73,6 @@ export const API = {
    * en `data.code` del aviso de paso.
    */
   totem: totemFromUrl() || (ENV.VITE_TOTEM_CODE ?? ''),
-  /**
-   * El UUID de `totems.id` — DISTINTO del `code` de arriba; la propia doc
-   * del backend avisa de no confundirlos. Hoy solo lo pide una ruta:
-   * `POST /api/totems/{totem_id}/events`, el aviso de «paso actualizado».
-   * No viaja en la URL de esta pantalla (el atajo del kiosco usa el code,
-   * que es lo que se puede escribir a mano); se configura aparte.
-   */
-  totemId: ENV.VITE_TOTEM_UUID ?? '',
   pollMs: Number(ENV.VITE_POLL_MS ?? 1500),
   phonePrefix: ENV.VITE_PHONE_PREFIX ?? '+591'
 };

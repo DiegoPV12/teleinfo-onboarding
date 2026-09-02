@@ -90,14 +90,14 @@ export function createSession({ onScene, onStatus } = {}) {
     const current = store.currentStep();
     if (!current || current.id === notifiedStep) return;
     notifiedStep = current.id;
-    client.notifyStep(current.id).then((delivered) => {
-      if (delivered === false) {
-        log.change('totem-event', 'sin-uuid-o-token', () =>
-          log.poll('aviso «paso actualizado»: falta VITE_TOTEM_UUID o VITE_API_TOKEN'));
-      } else if (delivered === 0) {
-        log.poll(`aviso «paso actualizado» → ${current.id}: encolado, tótem sin conexión abierta`);
+    client.notifyStep().then((audio) => {
+      if (audio === false) {
+        log.change('totem-event', 'sin-code', () =>
+          log.poll('aviso de paso: falta el code del tótem en la URL'));
+      } else if (!audio) {
+        log.poll(`aviso de paso → ${current.id}: sin audios pendientes`);
       } else {
-        log.ok(`aviso «paso actualizado» → ${current.id}: entregado a ${delivered} conexión(es)`);
+        log.ok(`aviso de paso → ${current.id}: ${audio.name} · step "${audio.step}"`);
       }
     }).catch(() => {});
   }

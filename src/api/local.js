@@ -78,13 +78,8 @@ function build() {
       return { status: 200, body: { items: person.photos, total: person.photos.length } };
     },
 
-    /**
-     * Aviso «paso actualizado» al tótem. En local no hay tótem al que
-     * avisarle: se limita a devolver `delivered: 0`, como haría la central
-     * real con un tótem sin conexiones abiertas.
-     */
     async notifyStep() {
-      return { status: 200, body: { delivered: 0 } };
+      return { status: 404, body: { detail: 'El tótem no tiene audios pendientes.' } };
     },
 
     /** PATCH parcial: lo omitido no se toca, el string vacío borra. */
