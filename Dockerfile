@@ -5,7 +5,7 @@ FROM php:8.2-apache
 RUN a2enmod rewrite
 
 # Copia todos los archivos de tu proyecto al directorio web del contenedor
-COPY . /var/www/html/
+COPY ./dist /var/www/html/
 
 # Asigna los permisos correctos a los archivos para que Apache pueda leerlos
 RUN chown -R www-data:www-data /var/www/html \
