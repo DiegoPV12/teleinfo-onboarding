@@ -6,6 +6,7 @@ import { buzz, HAPTICS } from '../haptics.js';
 import { createTimers } from '../timers.js';
 import { typeText } from '../ui/typewriter.js';
 import { renderStepBar, paintStepBar, stepLabel } from '../ui/stepbar.js';
+import { bindKeyboard, keyboard } from '../ui/keyboard.js';
 
 /**
  * Escena genérica de paso (identidad · trabajo · contacto).
@@ -35,6 +36,8 @@ export function createStepScene({ session }) {
   let refs = null;
   let stepId = null;
   let off = null;
+  /** Cada campo enganchado al teclado deja aquí su función para soltarlo. */
+  let unbind = [];
 
   /** Vuelca el estado en los inputs, sin pisar el que el visitante está usando. */
   function paint({ landed = [] } = {}) {
@@ -75,6 +78,12 @@ export function createStepScene({ session }) {
     refs.hint.textContent = step.hint ?? '';
     refs.hint.hidden = !step.hint;   // un párrafo vacío no debe dejar aire
     refs.skip.hidden = !step.optional;
+    refs.back.hidden = !store.previousStep();   // el paso 1 no tiene atrás
+
+    // El formulario se rehace en cada paso: los oyentes del paso anterior
+    // apuntan a inputs que ya no existen.
+    unbind.forEach((fn) => fn());
+    unbind = [];
 
     refs.form.querySelectorAll('input').forEach((input) => {
       const key = input.dataset.field;
@@ -84,6 +93,7 @@ export function createStepScene({ session }) {
       });
       input.addEventListener('focus', () => session.focus(key, true));
       input.addEventListener('blur', () => { session.focus(key, false); paint(); });
+      unbind.push(bindKeyboard(input, { label: input.getAttribute('aria-label') }));
     });
 
     refs.title.textContent = '';
@@ -106,16 +116,17 @@ export function createStepScene({ session }) {
         listen: el.querySelector('[data-el="stepListen"]'),
         skip: el.querySelector('[data-el="stepSkip"]'),
         verify: el.querySelector('[data-el="stepVerify"]'),
-        cancel: el.querySelector('[data-el="stepCancel"]')
+        back: el.querySelector('[data-el="stepBack"]')
       };
       renderStepBar(refs.bar);
 
       refs.verify.onclick = () => {
         buzz(HAPTICS.confirm);
+        keyboard()?.close();
         session.verifyStep(stepId);
       };
-      refs.skip.onclick = () => session.verifyStep(stepId);
-      refs.cancel.onclick = () => session.cancel();
+      refs.skip.onclick = () => { keyboard()?.close(); session.verifyStep(stepId); };
+      refs.back.onclick = () => { buzz(HAPTICS.tap); session.back(); };
 
       const step = store.currentStep();
       if (step) build(step);
@@ -131,6 +142,9 @@ export function createStepScene({ session }) {
 
     unmount() {
       timers.clear();
+      keyboard()?.close();
+      unbind.forEach((fn) => fn());
+      unbind = [];
       off?.();
       off = null;
       stepId = null;

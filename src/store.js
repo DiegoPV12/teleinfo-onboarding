@@ -1,6 +1,7 @@
 import { FIELDS } from './config.js';
 import { STEPS, STEP_IDS } from './steps.js';
 import { fieldError } from './validate.js';
+import { log } from './log.js';
 
 /**
  * Estado del registro. A diferencia de la versión anterior no es un simple
@@ -13,6 +14,12 @@ import { fieldError } from './validate.js';
  *  2. Campo con escritura en vuelo → se ignoran revisiones ≤ a la enviada.
  *  3. Resto → gana el remoto, y se avisa para animar la llegada del dato.
  */
+
+const blankPhotos = () => ({
+  front: { id: null, url: '', status: 'pending' },
+  left: { id: null, url: '', status: 'pending' },
+  right: { id: null, url: '', status: 'pending' }
+});
 
 const blank = () => ({
   value: '',
@@ -27,8 +34,12 @@ const blank = () => ({
 function createStore() {
   const fields = Object.fromEntries(FIELDS.map((f) => [f.key, blank()]));
   const steps = Object.fromEntries(STEP_IDS.map((id) => [id, { verified: false }]));
-  let photos = { front: { url: '', status: 'pending' }, left: { url: '', status: 'pending' }, right: { url: '', status: 'pending' } };
+  let photos = blankPhotos();
   let session = { id: null, active: false, phase: null, printed: false };
+  /** Pasos que el visitante reabrió con "volver atrás": no se re-verifican solos. */
+  const reopened = new Set();
+  /** Pasos que esta sesión no va a pedir (hoy: las fotos en el camino a mano). */
+  const skipped = new Set();
   const listeners = new Set();
 
   const emit = (event) => listeners.forEach((fn) => fn(event));
@@ -42,14 +53,57 @@ function createStore() {
     session: () => session,
     isVerified: (id) => Boolean(steps[id]?.verified),
 
+    /** Los pasos que esta sesión sí recorre, en orden. */
+    activeSteps: () => STEPS.filter((s) => !skipped.has(s.id)),
+
+    /**
+     * Quita un paso de esta sesión. Se decide al empezar, no a mitad de camino:
+     * el stepper se dibuja una vez y debe contar lo que de verdad se va a pedir.
+     */
+    skip(id) {
+      if (!steps[id] || skipped.has(id)) return false;
+      skipped.add(id);
+      return true;
+    },
+    isSkipped: (id) => skipped.has(id),
+
     /** Primer paso sin verificar; null si el registro está completo. */
-    currentStep: () => STEPS.find((s) => !steps[s.id].verified) ?? null,
+    currentStep: () => api.activeSteps().find((s) => !steps[s.id].verified) ?? null,
+
+    /** Paso anterior al actual, o null si ya estamos en el primero. */
+    previousStep() {
+      const list = api.activeSteps();
+      const current = api.currentStep();
+      if (!current) return list[list.length - 1] ?? null;
+      const at = list.indexOf(current);
+      return at > 0 ? list[at - 1] : null;
+    },
+
+    /** Volver atrás: reabre el paso y lo sostiene abierto. */
+    reopen(id) {
+      if (!steps[id]) return false;
+      reopened.add(id);
+      steps[id].verified = false;
+      emit({ type: 'sync', keys: [], stepsChanged: true });
+      return true;
+    },
+
+    /** Al verificar de nuevo, el paso deja de estar sostenido. */
+    release: (id) => reopened.delete(id),
+
+    /** El avance entre pasos es local: la central no guarda "verificado". */
+    markStepVerified(id) {
+      if (!steps[id] || steps[id].verified) return false;
+      steps[id].verified = true;
+      emit({ type: 'sync', keys: [], stepsChanged: true });
+      return true;
+    },
 
     /** Un paso puede verificarse si tiene todos sus campos o es opcional. */
     canVerify(id) {
       const step = STEPS.find((s) => s.id === id);
       if (!step) return false;
-      if (step.kind === 'photos') return step.shots.every((s) => photos[s.id]?.url);
+      if (step.kind === 'photos') return step.shots.every((s) => photos[s.id]?.id);
       const valid = step.fields.every((k) => !fieldError(k, fields[k].value));
       if (!valid) return false;
       if (step.optional) return true;
@@ -147,7 +201,10 @@ function createStore() {
 
         // 1 · el usuario está escribiendo justo en este campo
         if (f.focused && f.dirty) {
-          if (inc.value !== f.value) f.incoming = inc;
+          if (inc.value !== f.value) {
+            f.incoming = inc;
+            log.form(`«${key}» llegó del avatar mientras se escribía: se retiene`);
+          }
           continue;
         }
         if (f.dirty && inc.value !== f.value) continue;
@@ -156,14 +213,19 @@ function createStore() {
           f.pending = false;
           continue;
         }
+        log.form(`«${key}» viene de la central: "${inc.value}"`);
         api.__accept(key, inc);
         changed.push(key);
       }
 
+      // snap.steps === null: el backend no sabe de pasos, el avance es nuestro
       let stepsChanged = false;
-      for (const id of STEP_IDS) {
-        const v = Boolean(snap.steps[id]?.verified);
-        if (steps[id].verified !== v) { steps[id].verified = v; stepsChanged = true; }
+      if (snap.steps) {
+        for (const id of STEP_IDS) {
+          if (reopened.has(id)) continue;   // el visitante volvió a este paso
+          const v = Boolean(snap.steps[id]?.verified);
+          if (steps[id].verified !== v) { steps[id].verified = v; stepsChanged = true; }
+        }
       }
 
       const photosChanged = JSON.stringify(photos) !== JSON.stringify(snap.photos);
@@ -177,7 +239,9 @@ function createStore() {
     resetLocal() {
       for (const { key } of FIELDS) Object.assign(fields[key], blank());
       for (const id of STEP_IDS) steps[id].verified = false;
-      photos = { front: { url: '', status: 'pending' }, left: { url: '', status: 'pending' }, right: { url: '', status: 'pending' } };
+      reopened.clear();
+      skipped.clear();
+      photos = blankPhotos();
     },
 
     /** Se fue la sesión: la pantalla vuelve a estar vacía. */

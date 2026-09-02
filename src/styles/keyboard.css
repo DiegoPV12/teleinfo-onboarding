@@ -1,0 +1,147 @@
+/* ------------------------------------------------------------------
+   TECLADO EN PANTALLA
+   ------------------------------------------------------------------
+   Estética de iPad: fondo gris translúcido, teclas blancas con una sola
+   sombra dura debajo, esquinas de 8px y tipografía regular. Se escriben
+   los estilos completos en vez de importar los de simple-keyboard: son
+   cuatro reglas y así no hay que pelearse con sus valores por defecto. */
+
+:root {
+  /* Alto del teclado. Es la referencia para subir el contenido. */
+  --kb-h: min(42vh, 340px);
+  --kb-key-h: clamp(42px, 6.4vh, 58px);
+  --kb-gap: clamp(5px, 0.8vh, 8px);
+  --kb-face: #FFFFFF;
+  --kb-ctl: #ACB3BD;
+  --kb-bg: #D1D4DB;
+}
+
+.kb {
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 60;
+  background: var(--kb-bg);
+  border-top: 1px solid rgba(0, 0, 0, .12);
+  padding: 0 var(--kb-gap) calc(var(--kb-gap) * 2);
+  transform: translateY(101%);
+  transition: transform .34s var(--ease);
+  will-change: transform;
+  user-select: none;
+  -webkit-user-select: none;
+  touch-action: manipulation;
+}
+
+.kb.open { transform: translateY(0); }
+
+/* Barra superior: qué campo se está escribiendo, y la salida. */
+.kb-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  height: clamp(38px, 5vh, 46px);
+  padding: 0 calc(var(--kb-gap) + 2px);
+}
+
+.kb-label {
+  font-size: clamp(13px, 1.5vh, 15px);
+  font-weight: 500;
+  color: var(--ink-2);
+  letter-spacing: -.01em;
+}
+
+.kb-done {
+  border: 0;
+  background: none;
+  padding: 6px 10px;
+  font: inherit;
+  font-size: clamp(15px, 1.8vh, 17px);
+  font-weight: 600;
+  color: #007AFF;
+  cursor: pointer;
+  border-radius: 8px;
+}
+.kb-done:active { background: rgba(0, 0, 0, .06); }
+
+/* ------------------------------------------------------------- teclas */
+
+.kb .hg-row {
+  display: flex;
+  gap: var(--kb-gap);
+  margin-bottom: var(--kb-gap);
+}
+.kb .hg-row:last-child { margin-bottom: 0; }
+
+.kb .hg-button {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: var(--kb-key-h);
+  background: var(--kb-face);
+  border-radius: 8px;
+  box-shadow: 0 1px 0 rgba(0, 0, 0, .3);
+  font-family: var(--font);
+  font-size: clamp(17px, 2.4vh, 22px);
+  font-weight: 400;
+  color: var(--ink);
+  cursor: pointer;
+  transition: background .08s linear, transform .08s linear;
+}
+
+/* iOS marca la tecla pulsada en gris, no la hunde. */
+.kb .hg-button.hg-activeButton,
+.kb .hg-button:active {
+  background: #E4E6EA;
+  transform: translateY(1px);
+  box-shadow: 0 0 0 rgba(0, 0, 0, 0);
+}
+
+/* Teclas que no escriben: grises, como en el teclado del sistema. */
+.kb .hg-button.kb-ctl {
+  background: var(--kb-ctl);
+  font-size: clamp(15px, 2vh, 18px);
+  font-weight: 500;
+}
+.kb .hg-button.kb-ctl.hg-activeButton,
+.kb .hg-button.kb-ctl:active { background: #C3C8D0; }
+
+/* Proporciones de iPad: la barra espaciadora manda, los modificadores
+   son algo más anchos que una letra. */
+.kb .hg-button-space { flex: 5; }
+.kb .hg-button-shift,
+.kb .hg-button-bksp { flex: 1.6; }
+.kb .hg-button-numbers,
+.kb .hg-button-abc,
+.kb .hg-button-more { flex: 1.4; }
+.kb .hg-button-enter { flex: 2.2; background: #007AFF; color: #fff; }
+.kb .hg-button-enter.hg-activeButton,
+.kb .hg-button-enter:active { background: #0062CC; }
+.kb .kb-wide { flex: 1.6; font-size: clamp(14px, 1.8vh, 17px); }
+
+/* La segunda fila va sangrada, como en el teclado real. */
+.kb .hg-row:nth-child(2) { padding: 0 calc(var(--kb-key-h) * .28); }
+
+/* ------------------------------------------------- pad numérico (teléfono) */
+
+.kb.numeric .hg-rows {
+  width: min(360px, 60vw);
+  margin: 0 auto;
+}
+.kb.numeric .hg-button {
+  height: clamp(48px, 7.4vh, 66px);
+  font-size: clamp(21px, 3vh, 27px);
+  font-weight: 500;
+}
+.kb.numeric .hg-row:nth-child(2) { padding: 0; }
+
+/* --------------------------------------------- el contenido se hace a un lado */
+
+/* El escenario es `position: fixed; inset: 0`, así que basta con subirle el
+   borde inferior: la escena reparte de nuevo cabecera, campos y botones en el
+   alto que queda. Es mejor que desplazarla, porque «Verificar» sigue estando
+   a mano sin quedar tapado por el teclado. */
+.stage { transition: bottom .34s var(--ease); }
+body.kb-open .stage { bottom: var(--kb-h); }

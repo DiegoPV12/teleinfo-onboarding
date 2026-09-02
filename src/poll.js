@@ -1,24 +1,28 @@
 import { API } from './config.js';
+import { log } from './log.js';
 
 /**
- * Bucle de sondeo del estado. Encadena setTimeout tras cada respuesta en vez
- * de usar setInterval: con la red lenta del kiosco, setInterval solaparía
- * peticiones y llegarían snapshots desordenados.
+ * Bucle de sondeo. Qué se pide lo decide `pull`; aquí solo está el ritmo.
  *
- * Maneja 304 (nada cambió), 204 (aún no hay sesión) y corta la espera con
- * backoff exponencial cuando el tótem no responde.
+ * Encadena setTimeout tras cada respuesta en vez de usar setInterval: con la
+ * red lenta del kiosco, setInterval solaparía peticiones y llegarían snapshots
+ * desordenados. Ante un fallo espera con backoff exponencial.
  */
-export function createPoller({ client, intervalMs = API.pollMs, onState, onEmpty, onStatus }) {
+export function createPoller({ pull, intervalMs = API.pollMs, onResult, onStatus }) {
   let timer = null;
   let controller = null;
   let running = false;
-  let etag = null;
   let backoff = 0;
   let online = null;
+  let ticks = 0;
+  /** Un latido cada tantos sondeos, para no llenar la consola. */
+  const HEARTBEAT = Math.max(1, Math.round(20000 / intervalMs));
 
   const setOnline = (value, error) => {
     if (online === value) return;
     online = value;
+    if (value) log.ok('central en línea');
+    else log.bad('central fuera de alcance', error?.message ?? error);
     onStatus?.({ online: value, error });
   };
 
@@ -31,21 +35,19 @@ export function createPoller({ client, intervalMs = API.pollMs, onState, onEmpty
     if (!running) return;
     controller = new AbortController();
     try {
-      const res = await client.pull({ etag, signal: controller.signal });
+      const res = await pull(controller.signal);
       backoff = 0;
+      ticks += 1;
       setOnline(true);
-      if (res.kind === 'state') {
-        etag = res.etag;
-        onState?.(res.state);
-      } else if (res.kind === 'empty') {
-        etag = null;
-        onEmpty?.();
-      }
+      // Latido: la prueba de que el bucle sigue vivo aunque nada cambie.
+      if (ticks % HEARTBEAT === 0) log.poll(`vivo · ${ticks} sondeos · último: ${res.kind}`);
+      onResult?.(res);
       schedule(intervalMs);
     } catch (err) {
       if (err?.name === 'AbortError') return;
       setOnline(false, err);
       backoff = Math.min(backoff ? backoff * 2 : 1000, 8000);
+      log.poll(`reintento en ${backoff} ms`);
       schedule(backoff);
     }
   }
@@ -54,10 +56,12 @@ export function createPoller({ client, intervalMs = API.pollMs, onState, onEmpty
     start() {
       if (running) return;
       running = true;
+      log.poll(`arranca · cada ${intervalMs} ms`);
       tick();
     },
     stop() {
       running = false;
+      log.poll('detenido');
       clearTimeout(timer);
       controller?.abort();
     },
@@ -68,9 +72,8 @@ export function createPoller({ client, intervalMs = API.pollMs, onState, onEmpty
       controller?.abort();
       schedule(60);
     },
-    /** Olvida el etag para que el próximo sondeo traiga el estado completo. */
+    /** Fuerza una relectura completa de la persona. */
     resync() {
-      etag = null;
       this.kick();
     }
   };

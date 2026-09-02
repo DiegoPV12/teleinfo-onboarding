@@ -3,13 +3,18 @@
  * esto solo evita que el visitante cierre un paso con un correo mal escrito.
  */
 const RULES = {
+  // Mismo patrón que valida la central sobre `email`.
   email: {
-    test: (v) => /^[^\s@]+@[^\s@]+\.[a-z]{2,}$/i.test(v),
+    test: (v) => /^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(v),
     message: 'Revise el correo: falta el @ o el dominio.'
   },
+  // La central exige `phone_number` de 6 a 15 dígitos, sin espacios ni signos.
   telefono: {
-    test: (v) => (v.match(/\d/g) ?? []).length >= 7,
-    message: 'El teléfono parece incompleto.'
+    test: (v) => {
+      const digits = v.replace(/^\+\d{1,4}/, '').replace(/\D/g, '');
+      return digits.length >= 6 && digits.length <= 15;
+    },
+    message: 'El teléfono debe tener entre 6 y 15 dígitos.'
   }
 };
 

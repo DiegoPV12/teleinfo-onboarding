@@ -1,110 +1,136 @@
+import { splitPhone } from './contract.js';
+
 /**
- * Tótem local: guarda el borrador en memoria y respeta el mismo contrato que
- * el servicio real (ETag, 204/304/409/422, revisiones por campo, idempotencia
- * por command_id).
+ * Central en memoria. Habla el mismo contrato que rt-face-recognition —
+ * `PersonDetailResponse`, PATCH parcial con `exclude_unset`, listado de
+ * fotos— pero sin red y sin simular nada: solo guarda lo que se escribe.
  *
- * No simula nada. No detecta a nadie, no dicta datos y no toma fotos: el
- * borrador se abre con la primera escritura de la tablet y solo contiene lo
- * que se escriba a mano. Sirve para recorrer los flujos sin backend.
+ * Sirve para recorrer los flujos a mano cuando la central no está a mano.
  */
-import { STEPS } from '../steps.js';
+const BLANK = {
+  category: 'registered',
+  totem_id: null,
+  first_name: null,
+  paternal_surname: null,
+  maternal_surname: null,
+  description: null,
+  company: null,
+  job_title: null,
+  phone_prefix: null,
+  phone_number: null,
+  email: null,
+  pending_to_print: null
+};
 
-const FIELD_KEYS = ['nombre', 'apellido', 'cargo', 'empresa', 'telefono', 'email'];
+const now = () => new Date().toISOString();
 
-function emptyDraft() {
-  return {
-    fields: Object.fromEntries(
-      FIELD_KEYS.map((k) => [k, { value: '', source: null, field_revision: 0 }])
-    ),
-    steps: Object.fromEntries(STEPS.map((s) => [s.id, { verified: false }])),
-    photos: { front: null, left: null, right: null }
-  };
+/**
+ * Hay una sola central, así que hay un solo transporte local: dos clientes en
+ * el mismo proceso deben ver los mismos datos, como pasaría de verdad.
+ */
+let shared = null;
+export function createLocalTransport() {
+  if (shared) return shared;
+  shared = build();
+  return shared;
 }
 
-export function createLocalTransport() {
-  let draft = null;
-  let session = null;
-  let etag = 0;
-  const seenCommands = new Set();
+function build() {
+  const people = new Map();
+  let seq = 0;
 
-  const bump = () => { etag += 1; };
-
-  /** La primera escritura abre la sesión, igual que haría el tótem al detectar. */
-  const open = () => {
-    if (draft) return;
-    draft = emptyDraft();
-    session = `local-${Date.now().toString(36)}`;
-    bump();
-  };
-
-  const close = () => {
-    draft = null;
-    session = null;
-    seenCommands.clear();
-    bump();
-  };
-
-  const currentStep = () => STEPS.find((s) => !draft.steps[s.id].verified) ?? null;
-
-  const snapshot = () => ({
-    session_id: session,
-    active: true,
-    phase: currentStep()?.id ?? 'complete',
-    printed: false,
-    fields: draft.fields,
-    steps: draft.steps,
-    photos: draft.photos
+  const detail = (person) => ({
+    ...person,
+    is_active: true,
+    consent_at: null,
+    consent_reference: null,
+    consent_revoked_at: null,
+    delete_after: null,
+    active_sample_count: person.photos.length,
+    pending_sample_count: 0,
+    failed_sample_count: 0
   });
 
+  /** Quién está asignado al tótem. Se mueve a mano con __assign(). */
+  let assigned = null;
+
   return {
-    async getState({ etag: sent } = {}) {
-      if (!draft) return { status: 204, body: null, etag: null };
-      const tag = `"l${etag}"`;
-      if (sent === tag) return { status: 304, body: null, etag: tag };
-      return { status: 200, body: { state: snapshot(), etag: tag }, etag: tag };
+    /** Espejo de GET /api/totems/{id}/current-person. */
+    async getCurrentPerson() {
+      const person = assigned ? people.get(assigned) : null;
+      if (!person) return { status: 404, body: { detail: 'Totem sin persona asignada.' } };
+      return { status: 200, body: detail(person) };
     },
 
-    async postFields(body) {
-      open();
-      for (const u of body.updates ?? []) {
-        if (u.field?.endsWith('_verified')) {
-          const id = u.field.replace('_verified', '');
-          if (draft.steps[id]) draft.steps[id].verified = u.value === 'true' || u.value === true;
-          continue;
+    /** Solo para pruebas: simula que el tótem detectó a alguien. */
+    __assign(personId) { assigned = personId; },
+    __release() { assigned = null; },
+
+    async getPerson(personId) {
+      const person = people.get(personId);
+      if (!person) return { status: 404, body: { detail: 'Persona no encontrada.' } };
+      return { status: 200, body: detail(person) };
+    },
+
+    async listPhotos(personId) {
+      const person = people.get(personId);
+      if (!person) return { status: 404, body: { detail: 'Persona no encontrada.' } };
+      return { status: 200, body: { items: person.photos, total: person.photos.length } };
+    },
+
+    /** PATCH parcial: lo omitido no se toca, el string vacío borra. */
+    /** Aviso «paso completado». En local solo se registra. */
+    async notifyStep(personId, body) {
+      if (!people.has(personId)) return { status: 404, body: { detail: 'Persona no encontrada.' } };
+      return { status: 200, body: { ok: true, ...body } };
+    },
+
+    async patchPerson(personId, body) {
+      const person = people.get(personId);
+      if (!person) return { status: 404, body: { detail: 'Persona no encontrada.' } };
+      for (const [key, value] of Object.entries(body ?? {})) {
+        if (!(key in BLANK)) continue;
+        const clean = typeof value === 'string' ? value.trim() : value;
+        person[key] = clean === '' ? null : clean;
+      }
+      // Las mismas validaciones que corre la central sobre el objeto resultante.
+      if (person.phone_number && !/^[0-9]{6,15}$/.test(person.phone_number)) {
+        return { status: 422, body: { detail: 'El numero telefonico debe contener entre 6 y 15 digitos.' } };
+      }
+      if (person.phone_prefix && !/^\+[0-9]{1,4}$/.test(person.phone_prefix)) {
+        return { status: 422, body: { detail: 'El prefijo telefonico debe tener el formato +<codigo de pais>.' } };
+      }
+      if (person.email && !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(person.email)) {
+        return { status: 422, body: { detail: 'El email no tiene un formato valido.' } };
+      }
+      person.updated_at = now();
+      return { status: 200, body: detail(person) };
+    },
+
+    async createPerson({ body }) {
+      seq += 1;
+      const id = `local-person-${seq}`;
+      const person = { ...BLANK, id, photos: [], created_at: now(), updated_at: now() };
+
+      // El alta llega como multipart con los datos del paso 1 ya dentro.
+      if (body instanceof FormData) {
+        for (const [key, value] of body.entries()) {
+          if (key === 'totem_id') { person.totem_id = String(value).trim() || null; continue; }
+          if (key in person) person[key] = String(value).trim() || null;
         }
-        const f = draft.fields[u.field];
-        if (!f) continue;
-        f.value = u.value ?? '';
-        f.source = 'manual';
-        f.field_revision += 1;
       }
-      bump();
-      return { status: 200, body: { ok: true } };
+      if (person.phone_number) {
+        const parts = splitPhone(`${person.phone_prefix ?? ''} ${person.phone_number}`);
+        person.phone_prefix = parts.phone_prefix;
+        person.phone_number = parts.phone_number;
+      }
+
+      people.set(id, person);
+      return { status: 201, body: { person_id: id, id } };
     },
 
-    async postCommand(body) {
-      const allowed = [
-        'registration_data_confirmed', 'registration_final_confirmed',
-        'registration_photo_retake', 'registration_cancel', 'registration_ticket_choice'
-      ];
-      if (!allowed.includes(body.type)) return { status: 422, body: { detail: 'type no permitido' } };
-      // Cancelar y cerrar el registro terminan la sesión, como haría el tótem.
-      if (body.type === 'registration_cancel') { close(); return { status: 200, body: { ok: true } }; }
-      if (body.type === 'registration_final_confirmed') { close(); return { status: 200, body: { ok: true } }; }
-
-      open();
-      if (body.command_id && seenCommands.has(body.command_id)) return { status: 200, body: { ok: true } };
-      if (body.command_id) seenCommands.add(body.command_id);
-
-      if (body.type === 'registration_data_confirmed') {
-        const id = body.target ?? currentStep()?.id;
-        if (draft.steps[id]) draft.steps[id].verified = true;
-      }
-      if (body.type === 'registration_photo_retake' && draft.photos[body.target] !== undefined) {
-        draft.photos[body.target] = null;
-      }
-      bump();
-      return { status: 200, body: { ok: true } };
+    async photoUrl() {
+      return '';
     }
   };
 }

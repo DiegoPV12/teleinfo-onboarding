@@ -3,7 +3,21 @@
  * Campos del registro. `step` los agrupa; el color sigue siendo la identidad
  * visual de cada dato (ver tokens.css) y ahora también tiñe su paso.
  */
-const ENV = import.meta.env ?? {};
+// En el navegador la inyecta Vite; en Node (pruebas, scripts) caen las de process.
+const ENV = import.meta.env ?? globalThis.process?.env ?? {};
+
+/**
+ * El tótem-avatar se identifica en la URL de esta pantalla:
+ *   ?totem=<id>   ·   /t/<id>   ·   /totem/<id>
+ * La variable de entorno queda como respaldo para desarrollo.
+ */
+function totemFromUrl() {
+  if (typeof location === 'undefined') return '';
+  const query = new URLSearchParams(location.search).get('totem');
+  if (query) return query.trim();
+  const path = location.pathname.match(/\/(?:t|totem|totems)\/([^/?#]+)/i);
+  return path ? decodeURIComponent(path[1]) : '';
+}
 
 export const FIELDS = [
   { key: 'nombre',   label: 'Nombre',   ghost: 'Nombre',   step: 'identity' },
@@ -18,9 +32,10 @@ export const FIELD_BY_KEY = Object.fromEntries(FIELDS.map((f) => [f.key, f]));
 
 export const COPY = {
   heroLine1: 'Bienvenido',
-  heroLine2: 'a Teleinfo',
+  heroLine2: 'a Expo Teleinfo',
   lede: 'Acérquese al avatar para comenzar su registro.',
   waiting: 'Esperando a que alguien se acerque',
+  waitingManual: 'Listo para registrar',
   listening: 'Le escucho',
   listeningDone: 'Ya tengo todo',
   reviewHint: 'Corrija lo que haga falta, aquí o hablando',
@@ -38,22 +53,68 @@ export const TIMING = {
   sceneOut: 600,
   /** Espera antes de enviar una edición manual al backend. */
   editDebounce: Number(ENV.VITE_EDIT_DEBOUNCE_MS ?? 400),
-  idleReset: Number(ENV.VITE_IDLE_RESET_MS ?? 14000)
+  idleReset: Number(ENV.VITE_IDLE_RESET_MS ?? 14000),
+  /**
+   * Sin actividad en el formulario (nada escrito, ningún paso verificado)
+   * durante este tiempo, el registro se da por abandonado y la pantalla
+   * vuelve sola a la bienvenida. Reemplaza a la vieja detección por ausencia
+   * del tótem: esa medía si el avatar seguía viendo a la persona; esta mide
+   * si sigue pasando algo en el formulario, que es lo que de verdad importa.
+   */
+  abandonMs: Number(ENV.VITE_ABANDON_MS ?? 30000)
 };
 
 export const API = {
   base: (ENV.VITE_API_BASE ?? '').replace(/\/$/, ''),
-  totem: ENV.VITE_TOTEM_ID ?? 'totem-1',
-  pollMs: Number(ENV.VITE_POLL_MS ?? 1000),
-  /** Cómo se avisa al backend que un paso quedó verificado. Ver api/contract.js */
-  verifyMode: ENV.VITE_VERIFY_MODE ?? 'command'
+  /**
+   * Token de la central. Desde el commit 8fb6661 la escritura es pública
+   * (`POST /api/persons`, `PATCH /api/persons/{id}`) y también lo es
+   * `GET /api/totems/{id}/current-person`. Siguen pidiendo sesión
+   * `GET /api/persons/{id}` y el listado y la lectura de fotos, así que sin
+   * token esas dos cosas no se pueden hacer.
+   */
+  token: ENV.VITE_API_TOKEN ?? '',
+  /**
+   * Identifica al totem-avatar; viaja en la URL de esta pantalla. Es el CODE
+   * legible del tótem (ej. "totem-01"), no el UUID interno de `totems.id`:
+   * se consulta contra `GET /api/totems/by-code/{code}/current-person`.
+   */
+  totem: totemFromUrl() || (ENV.VITE_TOTEM_ID ?? ''),
+  pollMs: Number(ENV.VITE_POLL_MS ?? 1500),
+  /** Prefijo por defecto: la central exige phone_prefix y phone_number aparte. */
+  phonePrefix: ENV.VITE_PHONE_PREFIX ?? '+591'
 };
 
+
 /**
- * Slider de respaldo en la bienvenida. Con la detección funcionando se apaga;
- * mientras tanto es la única forma de entrar al flujo a mano.
+ * Cómo empieza una sesión en la bienvenida:
+ *
+ *   polling → se sondea GET /api/totems/{id}/current-person y, en cuanto el
+ *             tótem asigna a alguien, se entra con esa persona. Sin slider.
+ *   slider  → nadie detecta nada: el visitante entra a mano y la persona se
+ *             crea al cerrar el paso 1.
+ *   hybrid  → se sondea, y además se ofrece el slider por si la detección
+ *             falla. Gana lo que ocurra primero.
  */
-export const SHOW_SLIDER = String(ENV.VITE_SHOW_SLIDER ?? 'true') !== 'false';
+const MODES = ['polling', 'slider', 'hybrid'];
+const mode = String(ENV.VITE_START_MODE ?? 'hybrid').toLowerCase();
+export const START_MODE = MODES.includes(mode) ? mode : 'hybrid';
+
+/** El slider existe salvo en modo `polling`. */
+export const SHOW_SLIDER = START_MODE !== 'polling';
+
+/** ¿Se vigila el tótem esperando que asigne una persona? */
+export const WATCHES_TOTEM = START_MODE !== 'slider';
+
+/**
+ * Salta el paso de fotos en el registro A MANO (slider).
+ *
+ * Las fotos las toma el avatar, no esta pantalla: en un registro manual no hay
+ * avatar que las tome, así que pedirlas dejaría el flujo sin salida. Con la
+ * bandera en `false` el paso se pide igual, para el día que las fotos lleguen
+ * por otra vía. No afecta a los registros detectados por el tótem.
+ */
+export const SKIP_PHOTOS = String(ENV.VITE_SKIP_PHOTOS ?? 'true') !== 'false';
 
 /** `local` guarda el borrador en memoria; `http` habla con el tótem real. */
 export const TRANSPORT = ENV.VITE_TRANSPORT ?? 'local';

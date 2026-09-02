@@ -61,7 +61,6 @@
 
 /* Secundario con cuerpo: vive dentro del formulario, no en el pie */
 .btn.line {
-  align-self: flex-start;
   background: transparent;
   color: var(--ink);
   padding: 17px 32px;

@@ -1,4 +1,4 @@
-import { COPY, SHOW_SLIDER, TIMING } from '../config.js';
+import { COPY, SHOW_SLIDER, TIMING, WATCHES_TOTEM } from '../config.js';
 import { createTimers } from '../timers.js';
 import { typeText } from '../ui/typewriter.js';
 import { createSlider } from '../ui/slider.js';
@@ -25,7 +25,9 @@ export function createWelcomeScene({ session }) {
       const fallback = el.querySelector('[data-el="fallback"]');
       const sliderEl = el.querySelector('[data-el="slider"]');
 
-      el.querySelector('[data-el="waitTxt"]').textContent = COPY.waiting;
+      // Sin sondeo nadie está mirando: el texto no debe prometer detección.
+      el.querySelector('[data-el="waitTxt"]').textContent =
+        WATCHES_TOTEM ? COPY.waiting : COPY.waitingManual;
       head.classList.remove('in');
       fallback.classList.remove('in');
       fallback.hidden = !SHOW_SLIDER;

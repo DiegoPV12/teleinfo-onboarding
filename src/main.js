@@ -3,6 +3,7 @@ import './styles/fonts.css';
 import './styles/base.css';
 import './styles/components.css';
 import './styles/scenes.css';
+import './styles/keyboard.css';
 
 import { COPY } from './config.js';
 import { createRouter } from './router.js';

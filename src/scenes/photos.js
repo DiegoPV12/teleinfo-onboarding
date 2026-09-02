@@ -12,9 +12,9 @@ const STEP = STEP_BY_ID.photos;
 /**
  * Paso 4 · las tres tomas.
  *
- * La cámara la maneja el avatar; aquí solo se guía la postura y se confirma lo
- * que llega por el sondeo. Cada toma puede repetirse por separado
- * (registration_photo_retake con target).
+ * La cámara la maneja el avatar; aquí solo se guía la postura y se muestra lo
+ * que va apareciendo en `GET /api/persons/{id}/photos`. Las imágenes van
+ * autenticadas, así que se traen como blob y se cachea su object URL.
  */
 function renderShots(el) {
   el.innerHTML = STEP.shots
@@ -33,7 +33,7 @@ function renderShots(el) {
           <b>${s.label}</b>
           <span>${s.hint}</span>
         </figcaption>
-        <button class="retake off" data-retake="${s.id}">Repetir</button>
+
       </figure>`
     )
     .join('');
@@ -43,6 +43,18 @@ export function createPhotosScene({ session }) {
   const timers = createTimers();
   let refs = null;
   let off = null;
+  /** sampleId → object URL ya descargada. */
+  const urls = new Map();
+
+  function loadImage(sampleId, img) {
+    if (!sampleId || urls.has(sampleId)) return;
+    urls.set(sampleId, '');
+    session.photoUrl(sampleId).then((url) => {
+      if (!url) { urls.delete(sampleId); return; }
+      urls.set(sampleId, url);
+      if (img.isConnected) { img.src = url; img.hidden = false; }
+    });
+  }
 
   function paint() {
     const photos = store.photos();
@@ -51,18 +63,24 @@ export function createPhotosScene({ session }) {
     for (const s of STEP.shots) {
       const card = refs.shots.querySelector(`[data-shot="${s.id}"]`);
       const img = card.querySelector('.thumb');
-      const url = photos[s.id]?.url ?? '';
-      const ready = Boolean(url);
+      const sampleId = photos[s.id]?.id ?? null;
+      const ready = Boolean(sampleId);
 
-      if (ready && img.getAttribute('src') !== url) {
-        img.src = url;
-        buzz(HAPTICS.field);
+      if (ready) {
+        loadImage(sampleId, img);
+        const url = urls.get(sampleId);
+        if (url && img.getAttribute('src') !== url) {
+          img.src = url;
+          buzz(HAPTICS.field);
+        }
+        img.hidden = !url;
+      } else {
+        img.removeAttribute('src');
+        img.hidden = true;
       }
-      img.hidden = !ready;
       card.classList.toggle('ready', ready);
       card.classList.toggle('now', !ready && pending?.id === s.id);
       card.classList.toggle('wait', !ready && pending?.id !== s.id);
-      card.querySelector('.retake').classList.toggle('off', !ready);
     }
 
     refs.listen.textContent = pending
@@ -81,24 +99,18 @@ export function createPhotosScene({ session }) {
         shots: el.querySelector('[data-el="shots"]'),
         listen: el.querySelector('[data-el="photoListen"]'),
         verify: el.querySelector('[data-el="photoVerify"]'),
-        cancel: el.querySelector('[data-el="photoCancel"]')
+        back: el.querySelector('[data-el="photoBack"]')
       };
 
       renderStepBar(refs.bar);
       renderShots(refs.shots);
       refs.eyebrow.textContent = stepLabel('photos');
 
-      refs.shots.querySelectorAll('[data-retake]').forEach((btn) =>
-        btn.addEventListener('click', () => {
-          buzz(HAPTICS.tap);
-          session.retakePhoto(btn.dataset.retake);
-        })
-      );
       refs.verify.onclick = () => {
         buzz(HAPTICS.confirm);
         session.verifyStep('photos');
       };
-      refs.cancel.onclick = () => session.cancel();
+      refs.back.onclick = () => { buzz(HAPTICS.tap); session.back(); };
 
       refs.title.textContent = '';
       timers.after(() => typeText(refs.title, STEP.title, { cps: TIMING.titleCps, timers }), 120);
@@ -111,6 +123,8 @@ export function createPhotosScene({ session }) {
       timers.clear();
       off?.();
       off = null;
+      urls.forEach((url) => url && URL.revokeObjectURL(url));
+      urls.clear();
     }
   };
 }

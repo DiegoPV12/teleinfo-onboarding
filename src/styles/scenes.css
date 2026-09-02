@@ -137,7 +137,7 @@
 .fallback.in { opacity: 1; transform: none; }
 /* Ancho heredado del título: lo calcula welcome.js sobre --track-w */
 .fallback .slider { width: var(--track-w); min-width: 300px; max-width: 100%; }
-.btn.line { margin-top: var(--field-gap-y); }
+.body > .btn.line { align-self: flex-start; margin-top: var(--field-gap-y); }
 .note { margin-top: clamp(18px, 2.6vh, 28px); font-size: 16px; color: var(--ink-2); letter-spacing: -.012em; }
 .listen.wait p { color: var(--ink-3); }
 
@@ -238,18 +238,6 @@
 .shot figcaption span { font-size: 14px; color: var(--ink-2); letter-spacing: -.01em; }
 .shot.now figcaption span { color: var(--c); }
 
-.retake {
-  align-self: flex-start;
-  border: 0;
-  background: transparent;
-  padding: 2px 0;
-  font-size: 14px;
-  color: var(--ink-2);
-  cursor: pointer;
-  border-bottom: 1px solid var(--hair);
-}
-.retake.off { visibility: hidden; pointer-events: none; }
-.retake:hover { color: var(--ink); border-color: var(--ink); }
 
 /* Paso 4: el título más contenido para dejarle sitio a las tomas */
 .scene[data-scene="photos"] .title { font-size: clamp(30px, 3.4vw, 48px); }

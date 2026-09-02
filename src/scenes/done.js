@@ -5,8 +5,8 @@ import { typeText } from '../ui/typewriter.js';
 
 /**
  * Registro completo. La impresión de la credencial corre por cuenta del
- * backend; aquí solo se confirma y se espera a que el tótem cierre la sesión
- * (el sondeo devolverá 204 y la pantalla volverá sola a la bienvenida).
+ * backend; aquí solo se agradece y, tras un momento, la pantalla vuelve sola
+ * a la bienvenida lista para la siguiente persona.
  */
 export function createDoneScene({ session }) {
   const timers = createTimers();
@@ -35,8 +35,8 @@ export function createDoneScene({ session }) {
         });
       }, 200);
 
-      // Cierre del flujo: se avisa una sola vez al entrar.
-      session.confirmFinal();
+      // El kiosco siempre vuelve solo a la bienvenida.
+      timers.after(() => session.finish(), TIMING.idleReset);
     },
 
     unmount() {

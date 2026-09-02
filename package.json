@@ -7,9 +7,16 @@
   "scripts": {
     "dev": "vite",
     "build": "vite build",
-    "preview": "vite preview --host --port 4173"
+    "preview": "vite preview --host --port 4173",
+    "check": "node scripts/check-api.mjs",
+    "test:http": "node scripts/test-http.mjs",
+    "test:modes": "node scripts/test-modes.mjs",
+    "mock": "node scripts/mock.mjs"
   },
   "devDependencies": {
     "vite": "^5.4.10"
+  },
+  "dependencies": {
+    "simple-keyboard": "^3.8.181"
   }
 }

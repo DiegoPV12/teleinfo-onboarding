@@ -1,158 +1,286 @@
 import { API, FIELDS } from '../config.js';
-import { STEP_IDS } from '../steps.js';
+import { fieldsOf, STEP_IDS } from '../steps.js';
+import { log } from '../log.js';
 
 /**
  * CAPA ANTICORRUPCIÓN
  * ===================
- * Único archivo que conoce la forma real del backend. El PDF documenta los
- * endpoints pero no el contenido de `state`, así que este módulo lee de forma
- * tolerante varias formas posibles y las normaliza al modelo local.
+ * Único archivo que conoce la forma real de la central (rt-face-recognition).
+ * Traduce entre el modelo de la pantalla (nombre, apellido, cargo, empresa,
+ * teléfono, email) y el modelo de `persons` del backend.
  *
- * Cuando el backend quede cerrado, se ajusta AQUÍ y nada más.
+ * Contratos de referencia:
+ *   GET   /api/persons/{id}          → PersonDetailResponse
+ *   PATCH /api/persons/{id}          → PersonUpdateRequest (exclude_unset)
+ *   GET   /api/persons/{id}/photos   → PersonPhotoListResponse
  *
- * Modelo local resultante:
- *   {
- *     sessionId, active, phase,
- *     fields: { nombre: { value, source, revision }, ... },
- *     steps:  { identity: { verified }, ... },
- *     photos: { front: { url, status }, ... },
- *     printed, raw
- *   }
+ * Cuando el contrato cambie se ajusta AQUÍ y nada más: escenas, store y
+ * flujo no conocen ni un nombre de campo del backend.
  */
 
-/** Alias aceptados por si el backend nombra los campos en inglés. */
-const FIELD_ALIASES = {
-  nombre: ['nombre', 'name', 'first_name', 'firstName', 'given_name'],
-  apellido: ['apellido', 'lastname', 'last_name', 'lastName', 'surname'],
-  cargo: ['cargo', 'role', 'position', 'job_title', 'jobTitle'],
-  empresa: ['empresa', 'company', 'organization', 'org'],
-  telefono: ['telefono', 'teléfono', 'phone', 'phone_number', 'mobile'],
-  email: ['email', 'correo', 'mail', 'e_mail']
+/**
+ * Campo con el que la central asociará el registro al tótem que lo originó.
+ * Está en construcción del lado del backend: mientras no exista, viaja y se
+ * ignora —`POST /api/persons` declara sus campos con `Form(...)`, así que
+ * descarta los que no conoce— y el día que lo lean, ya está ahí.
+ */
+const TOTEM_FIELD = 'totem_id';
+
+/**
+ * Cola de impresión de la credencial. Se escribe en 0 al cerrar el registro
+ * —cualquier registro, detectado o a mano— para que la central lo tome como
+ * pendiente de imprimir. Imprimir no es cosa nuestra: solo se encola.
+ *
+ * Como `totem_id`, todavía no existe en la central desplegada: hoy viaja y se
+ * descarta sin error.
+ */
+const PRINT_FIELD = 'pending_to_print';
+const PRINT_PENDING = 0;
+
+/**
+ * Rellenos que el tótem puede dejar al crear la fila de un desconocido.
+ *
+ * `persons` exige `first_name` y `paternal_surname`, así que una persona recién
+ * detectada no puede nacer vacía: llega con algún marcador. Mostrarlo tal cual
+ * obligaría al visitante a borrarlo antes de escribir su nombre, así que estos
+ * valores se leen como campo vacío.
+ *
+ * Los valores exactos dependen de lo que use el backend — confirmar.
+ */
+const PLACEHOLDERS = new Set([
+  'unknown', 'desconocido', 'desconocida', 'sin nombre', 'sin apellido',
+  'sin dato', 'n/a', 'na', '-', '--', '...', 'pendiente'
+]);
+
+const scrub = (value) => {
+  const text = String(value ?? '').trim();
+  return PLACEHOLDERS.has(text.toLowerCase()) ? '' : text;
 };
 
-const SHOT_ALIASES = {
-  front: ['front', 'frontal', 'center', 'centro'],
-  left: ['left', 'izquierda', 'izq', 'side_left', 'left_side'],
-  right: ['right', 'derecha', 'der', 'side_right', 'right_side']
+/** Nuestros campos que van 1:1 al modelo de persona. */
+const DIRECT = {
+  nombre: 'first_name',
+  apellido: 'paternal_surname',
+  cargo: 'job_title',
+  empresa: 'company',
+  email: 'email'
 };
 
-const pick = (obj, names) => {
-  if (!obj) return undefined;
-  for (const n of names) if (obj[n] !== undefined && obj[n] !== null) return obj[n];
-  return undefined;
+/**
+ * El teléfono es el único que no va 1:1: la central lo quiere partido en
+ * `phone_prefix` (`^\+[0-9]{1,4}$`) y `phone_number` (`^[0-9]{6,15}$`, sin
+ * espacios). La pantalla muestra un solo campo y aquí se parte.
+ */
+export function splitPhone(raw) {
+  const text = String(raw ?? '').trim();
+  if (!text) return { phone_prefix: null, phone_number: null };
+  const match = text.match(/^\+(\d{1,4})[\s-]*(.*)$/);
+  const prefix = match ? `+${match[1]}` : API.phonePrefix;
+  const digits = (match ? match[2] : text).replace(/\D/g, '');
+  if (!digits) return { phone_prefix: null, phone_number: null };
+  return { phone_prefix: prefix, phone_number: digits };
+}
+
+/** Y al revés, para mostrar lo que ya está guardado. */
+export function joinPhone(person) {
+  const number = person?.phone_number ?? '';
+  if (!number) return '';
+  const prefix = person?.phone_prefix ?? '';
+  return prefix ? `${prefix} ${number}` : String(number);
+}
+
+/**
+ * `persons` no tiene revisión por campo: tiene un solo `updated_at`. Lo usamos
+ * como revisión común — sirve igual para descartar respuestas viejas, porque
+ * cualquier escritura nuestra deja el reloj del servidor por delante.
+ */
+const revisionOf = (person) => {
+  const at = Date.parse(person?.updated_at ?? '');
+  return Number.isFinite(at) ? at : 0;
 };
 
-/** Un campo puede llegar como string suelto o como objeto con metadatos. */
-function readField(raw) {
-  if (raw === undefined || raw === null) return { value: '', source: null, revision: 0 };
-  if (typeof raw === 'string' || typeof raw === 'number') {
-    return { value: String(raw), source: null, revision: 0 };
+/** Normaliza PersonDetailResponse al modelo local. */
+export function readPerson(payload, photos = []) {
+  const person = payload ?? {};
+  const revision = revisionOf(person);
+  const fields = {};
+
+  const scrubbed = [];
+  for (const { key } of FIELDS) {
+    const raw = key === 'telefono' ? joinPhone(person) : person[DIRECT[key]];
+    const value = scrub(raw);
+    if (raw && !value) scrubbed.push(`${key}="${raw}"`);
+    fields[key] = {
+      value,
+      // La central no dice quién escribió; si el dato está y no lo pusimos
+      // nosotros, vino del avatar.
+      source: null,
+      revision
+    };
   }
+
+  // Los rellenos que el tótem escribe para un desconocido se leen vacíos; se
+  // dice una vez por persona para poder confirmar la lista de PLACEHOLDERS.
+  if (scrubbed.length && person.id) {
+    log.change(`relleno:${person.id}`, scrubbed.join('|'), () =>
+      log.form(`rellenos del tótem ignorados · ${scrubbed.join(', ')}`));
+  }
+
   return {
-    value: String(pick(raw, ['value', 'text', 'val']) ?? ''),
-    source: pick(raw, ['source', 'origin']) ?? null,
-    revision: Number(pick(raw, ['field_revision', 'revision', 'rev', 'version']) ?? 0)
+    sessionId: person.id ?? null,
+    active: person.is_active !== false,
+    phase: null,
+    printed: false,
+    updatedAt: person.updated_at ?? null,
+    fields,
+    steps: null,   // ver nota en readSteps
+    photos: readPhotos(photos),
+    counts: {
+      active: person.active_sample_count ?? 0,
+      pending: person.pending_sample_count ?? 0,
+      failed: person.failed_sample_count ?? 0
+    },
+    raw: person
   };
 }
 
-function readFields(state) {
-  const bag = state.fields ?? state.form ?? state.data ?? state;
+/*
+ * NOTA · `steps: null`
+ * La central no guarda "paso verificado": `persons` no tiene ese concepto. El
+ * avance entre pasos es local a esta pantalla y el store lo conserva. Si el
+ * backend agrega un campo para esto, se lee aquí y se devuelve el objeto
+ * { identity: { verified }, ... } en lugar de null.
+ */
+
+/**
+ * Las fotos no vienen etiquetadas por pose, así que se reparten por orden de
+ * llegada: la primera es frontal, la segunda izquierda, la tercera derecha.
+ */
+const SHOT_ORDER = ['front', 'left', 'right'];
+
+function readPhotos(items = []) {
+  const usable = items.filter((p) => p?.is_active !== false);
   const out = {};
-  for (const f of FIELDS) {
-    const raw = pick(bag, FIELD_ALIASES[f.key] ?? [f.key]);
-    out[f.key] = readField(raw);
-  }
+  SHOT_ORDER.forEach((shot, i) => {
+    const item = usable[i];
+    out[shot] = item
+      ? { id: item.id, url: '', status: item.processing_status ?? 'ready' }
+      : { id: null, url: '', status: 'pending' };
+  });
   return out;
 }
 
 /**
- * `verified` puede venir como state.steps.identity.verified, como
- * state.identity_verified, o dentro de una lista de pasos completados.
+ * Cuerpo de PATCH /api/persons/{id}. Solo van los campos presentes: lo que se
+ * omite queda intacto, y un string vacío borra el dato.
  */
-function readSteps(state) {
-  const bag = state.steps ?? state.step_status ?? {};
-  const completed = state.completed_steps ?? state.verified_steps ?? null;
-  const out = {};
-  for (const id of STEP_IDS) {
-    let verified = false;
-    const entry = Array.isArray(bag) ? bag.find((s) => s?.id === id) : bag[id];
-    if (entry && typeof entry === 'object') verified = Boolean(pick(entry, ['verified', 'confirmed', 'done']));
-    else if (typeof entry === 'boolean') verified = entry;
-    else if (state[`${id}_verified`] !== undefined) verified = Boolean(state[`${id}_verified`]);
-    else if (Array.isArray(completed)) verified = completed.includes(id);
-    out[id] = { verified };
+export function patchPayload(updates) {
+  const body = {};
+  for (const { key, value } of updates) {
+    const clean = String(value ?? '').trim();
+    if (key === 'telefono') {
+      const { phone_prefix, phone_number } = splitPhone(clean);
+      body.phone_prefix = phone_number ? phone_prefix : '';
+      body.phone_number = phone_number ?? '';
+      continue;
+    }
+    const target = DIRECT[key];
+    if (target) body[target] = clean;
   }
-  return out;
+  return body;
 }
 
-function readPhotos(state) {
-  const bag = state.photos ?? state.shots ?? state.images ?? {};
-  const out = {};
-  for (const [id, names] of Object.entries(SHOT_ALIASES)) {
-    let raw = Array.isArray(bag)
-      ? bag.find((p) => names.includes(p?.id ?? p?.kind ?? p?.pose))
-      : pick(bag, names);
-    if (typeof raw === 'string') raw = { url: raw };
-    out[id] = {
-      url: raw ? (pick(raw, ['url', 'src', 'href', 'data_url', 'dataUrl']) ?? '') : '',
-      status: raw ? (pick(raw, ['status', 'state']) ?? 'ready') : 'pending'
-    };
-  }
-  return out;
+/** Cierre del registro: lo deja encolado para imprimir. */
+export function finishPayload() {
+  return { [PRINT_FIELD]: PRINT_PENDING };
 }
-
-/** Normaliza la respuesta de GET /api/{totem}/state al modelo local. */
-export function readState(payload) {
-  const state = payload?.state ?? payload ?? {};
-  return {
-    sessionId: pick(state, ['session_id', 'sessionId', 'session', 'id']) ?? null,
-    active: pick(state, ['active', 'session_active', 'present', 'detected']) ?? true,
-    phase: pick(state, ['phase', 'stage', 'step', 'current_step']) ?? null,
-    printed: Boolean(pick(state, ['printed', 'ticket_printed', 'credential_printed'])),
-    fields: readFields(state),
-    steps: readSteps(state),
-    photos: readPhotos(state),
-    raw: state
-  };
-}
-
-/** Cuerpo de POST /api/{totem}/fields. */
-export function fieldsPayload(updates) {
-  return {
-    updates: updates.map(({ key, value, revision }) => ({
-      field: key,
-      value: value === '' ? null : value,
-      expected_field_revision: revision ?? 0
-    }))
-  };
-}
-
-export const COMMAND = {
-  dataConfirmed: 'registration_data_confirmed',
-  finalConfirmed: 'registration_final_confirmed',
-  photoRetake: 'registration_photo_retake',
-  cancel: 'registration_cancel',
-  ticketChoice: 'registration_ticket_choice'
-};
 
 /**
- * Verificación de un paso. Sin definición cerrada del backend soportamos las
- * dos formas y elegimos con VITE_VERIFY_MODE:
+ * Aviso «paso completado». TODAVÍA NO HAY ENDPOINT REAL — esto es la forma,
+ * a la espera de que confirmen la ruta y el nombre exacto de los campos.
  *
- *   command → POST /command { type: registration_data_confirmed, target: <step> }
- *   fields  → POST /fields  con un pseudo-campo <step>_verified
+ * La pieza importante: se identifica el paso por su ID DE TEXTO
+ * ('identity' | 'work' | 'contact' | 'photos', ver steps.js), nunca por su
+ * posición numérica. Si el día de mañana se agrega un paso, se quita uno o
+ * se reordenan, el id de cada paso no cambia — solo su lugar en la lista.
+ * Mandar "paso 2" se rompería con ese cambio; mandar "work" no.
  *
- * Devuelve { endpoint, body }.
+ * Se manda además `total` y `index` (posición actual, 0-based) como
+ * información de contexto — útil para logs o UI del lado del backend — pero
+ * nunca como la clave para identificar de cuál paso se trata.
  */
-export function verifyStepRequest(stepId, fieldUpdates = []) {
-  if (API.verifyMode === 'fields') {
-    return {
-      endpoint: 'fields',
-      body: fieldsPayload([...fieldUpdates, { key: `${stepId}_verified`, value: 'true', revision: 0 }])
-    };
-  }
+export function stepEventPayload(stepId, personId) {
+  const at = STEP_IDS.indexOf(stepId);
   return {
-    endpoint: 'command',
-    body: { type: COMMAND.dataConfirmed, target: stepId, accepted: true }
+    person_id: personId,
+    step: stepId,                 // identificador estable — lo que importa
+    step_index: at,                // contexto: posición actual (puede cambiar)
+    step_count: STEP_IDS.length,   // contexto: cuántos pasos hay ahora
+    completed_at: new Date().toISOString()
   };
 }
+
+/** Ruta del aviso de paso. Ajustar en cuanto la confirmen. */
+export const stepEventPath = (personId) =>
+  `/api/persons/${encodeURIComponent(personId)}/steps`;
+
+/** Los campos de un paso, listos para PATCH. */
+export function stepPayload(stepId, read) {
+  return patchPayload(fieldsOf(stepId).map((f) => ({ key: f.key, value: read(f.key) })));
+}
+
+/**
+ * Alta de la persona, al cerrar el paso 1.
+ *
+ * La central exige `first_name` y `paternal_surname`, así que no puede nacer
+ * en blanco: el slider solo abre el formulario y la persona se crea cuando ya
+ * hay nombre y apellido. `POST /api/persons` es multipart y pide un
+ * `Idempotency-Key` UUID.
+ */
+export function createRequest(read) {
+  const form = new FormData();
+  form.append('category', 'registered');
+  form.append('first_name', read('nombre'));
+  form.append('paternal_surname', read('apellido'));
+
+  for (const [key, target] of Object.entries(DIRECT)) {
+    if (key === 'nombre' || key === 'apellido') continue;
+    const value = read(key);
+    if (value) form.append(target, value);
+  }
+
+  const { phone_prefix, phone_number } = splitPhone(read('telefono'));
+  if (phone_number) {
+    form.append('phone_prefix', phone_prefix);
+    form.append('phone_number', phone_number);
+  }
+
+  // De qué tótem salió este registro. Se manda solo en el alta.
+  if (API.totem) form.append(TOTEM_FIELD, API.totem);
+
+  return { path: '/api/persons', body: form, idempotent: true };
+}
+
+/**
+ * Persona asignada ahora mismo al tótem.
+ *
+ * `GET /api/totems/by-code/{code}/current-person` devuelve el mismo
+ * `PersonDetailResponse` que `GET /api/persons/{id}`, así que se lee con
+ * `readPerson` sin más. No lleva autenticación: es una decisión explícita del
+ * backend.
+ *
+ * Se busca por CODE (el identificador legible, ej. "totem-01"), no por el
+ * UUID interno de `totems.id` — hay dos rutas equivalentes y esta pantalla usa
+ * la de `code` porque es la que se puede escribir a mano en el atajo de cada
+ * tablet sin ir a buscar un UUID.
+ *
+ * Un `404` cubre tres casos que el cliente no puede distinguir —el tótem no
+ * existe, no tiene a nadie asignado, o apunta a una persona borrada— y los tres
+ * significan lo mismo para esta pantalla: ahora no hay nadie.
+ */
+export const currentPersonPath = (totemCode) =>
+  `/api/totems/by-code/${encodeURIComponent(totemCode)}/current-person`;
+
+/** Id de la persona recién creada, sea cual sea la forma de la respuesta. */
+export const personIdOf = (payload) =>
+  payload?.person_id ?? payload?.id ?? payload?.person?.id ?? null;

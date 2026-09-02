@@ -1,0 +1,348 @@
+{
+  "info": {
+    "name": "Teleinfo · Onboarding ⇄ Central",
+    "description": "Exactamente las llamadas que hace la pantalla de onboarding contra rt-face-recognition, en el mismo orden del flujo. Sirve como especificación ejecutable y para verificar un despliegue nuevo.\n\nVariables: `baseUrl`, `totemId`, `token` (opcional). `personId` y `sampleId` se rellenan solos al ejecutar la colección en orden.\n\nSe puede correr entero con Newman:\n\n    newman run postman/teleinfo-onboarding.postman_collection.json -e postman/local.postman_environment.json",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    { "key": "baseUrl", "value": "http://127.0.0.1:9099" },
+    { "key": "totemId", "value": "ef17a152-86c6-43fe-b5d1-dba3959d7c0b" },
+    { "key": "token", "value": "" },
+    { "key": "personId", "value": "" },
+    { "key": "sampleId", "value": "" }
+  ],
+  "item": [
+    {
+      "name": "0 · Disponibilidad",
+      "item": [
+        {
+          "name": "GET /health",
+          "request": { "method": "GET", "url": "{{baseUrl}}/health" },
+          "event": [{
+            "listen": "test",
+            "script": { "type": "text/javascript", "exec": [
+              "pm.test('responde 200', () => pm.response.to.have.status(200));",
+              "pm.test('tarda menos de 2 s', () => pm.expect(pm.response.responseTime).to.be.below(2000));"
+            ]}
+          }]
+        }
+      ]
+    },
+    {
+      "name": "1 · Detección — quién está frente al tótem",
+      "item": [
+        {
+          "name": "GET current-person · sin nadie → 404",
+          "request": { "method": "GET", "url": "{{baseUrl}}/api/totems/{{totemId}}/current-person" },
+          "event": [{
+            "listen": "test",
+            "script": { "type": "text/javascript", "exec": [
+              "pm.test('404 o 200, nunca 401', () => pm.expect([200, 404]).to.include(pm.response.code));",
+              "pm.test('es publico: no exige token', () => pm.expect(pm.response.code).to.not.eql(401));",
+              "if (pm.response.code === 200) {",
+              "  const p = pm.response.json();",
+              "  pm.test('trae el PersonDetailResponse completo', () => {",
+              "    pm.expect(p).to.have.property('id');",
+              "    pm.expect(p).to.have.property('first_name');",
+              "    pm.expect(p).to.have.property('active_sample_count');",
+              "  });",
+              "  pm.collectionVariables.set('personId', p.id);",
+              "}"
+            ]}
+          }]
+        },
+        {
+          "name": "GET current-person · tótem que no existe → 404",
+          "request": { "method": "GET", "url": "{{baseUrl}}/api/totems/00000000-0000-4000-8000-000000000000/current-person" },
+          "event": [{
+            "listen": "test",
+            "script": { "type": "text/javascript", "exec": [
+              "pm.test('404', () => pm.response.to.have.status(404));",
+              "pm.test('trae detail', () => pm.expect(pm.response.json()).to.have.property('detail'));"
+            ]}
+          }]
+        },
+        {
+          "name": "GET current-person · id no-UUID → 422",
+          "request": { "method": "GET", "url": "{{baseUrl}}/api/totems/totem-feria-01/current-person" },
+          "event": [{
+            "listen": "test",
+            "script": { "type": "text/javascript", "exec": [
+              "pm.test('el totem_id debe ser UUID, no el code', () => pm.expect([404, 422]).to.include(pm.response.code));",
+              "if (pm.response.code === 422) pm.test('422 confirma que exige UUID', () => true);"
+            ]}
+          }]
+        }
+      ]
+    },
+    {
+      "name": "2 · Alta — camino del slider",
+      "item": [
+        {
+          "name": "POST /api/persons · paso 1",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Idempotency-Key", "value": "{{$guid}}" }],
+            "body": {
+              "mode": "formdata",
+              "formdata": [
+                { "key": "category", "value": "registered", "type": "text" },
+                { "key": "first_name", "value": "Prueba", "type": "text" },
+                { "key": "paternal_surname", "value": "Onboarding", "type": "text" },
+                { "key": "totem_id", "value": "{{totemId}}", "type": "text", "description": "Lo ignora hasta que la central lo lea" }
+              ]
+            },
+            "url": "{{baseUrl}}/api/persons"
+          },
+          "event": [{
+            "listen": "test",
+            "script": { "type": "text/javascript", "exec": [
+              "pm.test('201 Created', () => pm.response.to.have.status(201));",
+              "pm.test('es publico: no exige token', () => pm.expect(pm.response.code).to.not.eql(401));",
+              "const b = pm.response.json();",
+              "pm.test('devuelve person_id', () => pm.expect(b.person_id ?? b.id).to.be.a('string'));",
+              "pm.collectionVariables.set('personId', b.person_id ?? b.id);"
+            ]}
+          }]
+        },
+        {
+          "name": "POST /api/persons · Idempotency-Key inválida → 422",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Idempotency-Key", "value": "idem-12345" }],
+            "body": { "mode": "formdata", "formdata": [
+              { "key": "first_name", "value": "Prueba", "type": "text" },
+              { "key": "paternal_surname", "value": "Clave", "type": "text" }
+            ]},
+            "url": "{{baseUrl}}/api/persons"
+          },
+          "event": [{
+            "listen": "test",
+            "script": { "type": "text/javascript", "exec": [
+              "pm.test('422: la clave debe ser UUID v4', () => pm.response.to.have.status(422));"
+            ]}
+          }]
+        },
+        {
+          "name": "POST /api/persons · sin apellido → 422",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Idempotency-Key", "value": "{{$guid}}" }],
+            "body": { "mode": "formdata", "formdata": [
+              { "key": "first_name", "value": "Solo", "type": "text" }
+            ]},
+            "url": "{{baseUrl}}/api/persons"
+          },
+          "event": [{
+            "listen": "test",
+            "script": { "type": "text/javascript", "exec": [
+              "pm.test('422: no puede nacer en blanco', () => pm.expect([422]).to.include(pm.response.code));"
+            ]}
+          }]
+        }
+      ]
+    },
+    {
+      "name": "3 · Pasos — escritura parcial",
+      "item": [
+        {
+          "name": "PATCH paso 2 · cargo + empresa",
+          "request": {
+            "method": "PATCH",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\n  \"job_title\": \"Full Stack Developer\",\n  \"company\": \"Patio Delivery\"\n}" },
+            "url": "{{baseUrl}}/api/persons/{{personId}}"
+          },
+          "event": [{
+            "listen": "test",
+            "script": { "type": "text/javascript", "exec": [
+              "pm.test('200 OK', () => pm.response.to.have.status(200));",
+              "pm.test('es publico: no exige token ni CSRF', () => pm.expect(pm.response.code).to.not.eql(401));",
+              "const p = pm.response.json();",
+              "pm.test('escribio los dos campos', () => {",
+              "  pm.expect(p.job_title).to.eql('Full Stack Developer');",
+              "  pm.expect(p.company).to.eql('Patio Delivery');",
+              "});",
+              "pm.test('exclude_unset: no toco el nombre', () => pm.expect(p.first_name).to.eql('Prueba'));"
+            ]}
+          }]
+        },
+        {
+          "name": "PATCH paso 3 · teléfono partido + email",
+          "request": {
+            "method": "PATCH",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\n  \"phone_prefix\": \"+591\",\n  \"phone_number\": \"70012345\",\n  \"email\": \"prueba@teleinfo.test\"\n}" },
+            "url": "{{baseUrl}}/api/persons/{{personId}}"
+          },
+          "event": [{
+            "listen": "test",
+            "script": { "type": "text/javascript", "exec": [
+              "pm.test('200 OK', () => pm.response.to.have.status(200));",
+              "const p = pm.response.json();",
+              "pm.test('prefijo y numero por separado', () => {",
+              "  pm.expect(p.phone_prefix).to.eql('+591');",
+              "  pm.expect(p.phone_number).to.eql('70012345');",
+              "});",
+              "pm.test('conserva lo del paso 2', () => pm.expect(p.company).to.eql('Patio Delivery'));"
+            ]}
+          }]
+        },
+        {
+          "name": "PATCH · teléfono con espacios → 422",
+          "request": {
+            "method": "PATCH",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{ \"phone_number\": \"700 12345\" }" },
+            "url": "{{baseUrl}}/api/persons/{{personId}}"
+          },
+          "event": [{
+            "listen": "test",
+            "script": { "type": "text/javascript", "exec": [
+              "pm.test('422: phone_number es ^[0-9]{6,15}$', () => pm.response.to.have.status(422));",
+              "pm.test('explica el motivo', () => pm.expect(pm.response.json().detail).to.be.a('string'));"
+            ]}
+          }]
+        },
+        {
+          "name": "PATCH · email inválido → 422",
+          "request": {
+            "method": "PATCH",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{ \"email\": \"no-es-un-correo\" }" },
+            "url": "{{baseUrl}}/api/persons/{{personId}}"
+          },
+          "event": [{
+            "listen": "test",
+            "script": { "type": "text/javascript", "exec": [
+              "pm.test('422', () => pm.response.to.have.status(422));"
+            ]}
+          }]
+        },
+        {
+          "name": "PATCH · string vacío borra el campo",
+          "request": {
+            "method": "PATCH",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{ \"description\": \"\" }" },
+            "url": "{{baseUrl}}/api/persons/{{personId}}"
+          },
+          "event": [{
+            "listen": "test",
+            "script": { "type": "text/javascript", "exec": [
+              "pm.test('200 OK', () => pm.response.to.have.status(200));",
+              "pm.test('vaciar equivale a null', () => pm.expect(pm.response.json().description).to.eql(null));"
+            ]}
+          }]
+        },
+        {
+          "name": "PATCH · persona inexistente → 404",
+          "request": {
+            "method": "PATCH",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{ \"company\": \"X\" }" },
+            "url": "{{baseUrl}}/api/persons/00000000-0000-4000-8000-999999999999"
+          },
+          "event": [{
+            "listen": "test",
+            "script": { "type": "text/javascript", "exec": [
+              "pm.test('404', () => pm.response.to.have.status(404));"
+            ]}
+          }]
+        }
+      ]
+    },
+    {
+      "name": "4 · Fotos — siguen pidiendo sesión",
+      "item": [
+        {
+          "name": "GET photos · sin token",
+          "request": { "method": "GET", "url": "{{baseUrl}}/api/persons/{{personId}}/photos" },
+          "event": [{
+            "listen": "test",
+            "script": { "type": "text/javascript", "exec": [
+              "pm.test('401 confirma que NO es publico', () => pm.expect([200, 401]).to.include(pm.response.code));",
+              "if (pm.response.code === 200) {",
+              "  console.log('¡Liberaron el listado de fotos! Se puede quitar el token del paso 4.');",
+              "}"
+            ]}
+          }]
+        },
+        {
+          "name": "GET photos · con token",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+            "url": "{{baseUrl}}/api/persons/{{personId}}/photos"
+          },
+          "event": [{
+            "listen": "test",
+            "script": { "type": "text/javascript", "exec": [
+              "if (!pm.collectionVariables.get('token')) { pm.test.skip('sin token configurado'); } else {",
+              "  pm.test('200 OK', () => pm.response.to.have.status(200));",
+              "  const b = pm.response.json();",
+              "  pm.test('items + total', () => { pm.expect(b).to.have.property('items'); pm.expect(b).to.have.property('total'); });",
+              "  if (b.items && b.items.length) pm.collectionVariables.set('sampleId', b.items[0].id);",
+              "}"
+            ]}
+          }]
+        },
+        {
+          "name": "GET imagen de una foto",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+            "url": "{{baseUrl}}/api/persons/{{personId}}/photos/{{sampleId}}/image"
+          },
+          "event": [{
+            "listen": "test",
+            "script": { "type": "text/javascript", "exec": [
+              "if (!pm.collectionVariables.get('sampleId')) { pm.test.skip('sin fotos que leer'); } else {",
+              "  pm.test('200 OK', () => pm.response.to.have.status(200));",
+              "  pm.test('devuelve una imagen', () => pm.expect(pm.response.headers.get('Content-Type')).to.include('image'));",
+              "}"
+            ]}
+          }]
+        }
+      ]
+    },
+    {
+      "name": "5 · Lectura de la persona",
+      "item": [
+        {
+          "name": "GET persona · sin token",
+          "request": { "method": "GET", "url": "{{baseUrl}}/api/persons/{{personId}}" },
+          "event": [{
+            "listen": "test",
+            "script": { "type": "text/javascript", "exec": [
+              "pm.test('401 o 200', () => pm.expect([200, 401]).to.include(pm.response.code));",
+              "if (pm.response.code === 200) console.log('¡Liberaron GET /api/persons/{id}! Se puede sondear la persona propia sin token.');"
+            ]}
+          }]
+        },
+        {
+          "name": "GET persona · con token",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+            "url": "{{baseUrl}}/api/persons/{{personId}}"
+          },
+          "event": [{
+            "listen": "test",
+            "script": { "type": "text/javascript", "exec": [
+              "if (!pm.collectionVariables.get('token')) { pm.test.skip('sin token configurado'); } else {",
+              "  pm.test('200 OK', () => pm.response.to.have.status(200));",
+              "  const p = pm.response.json();",
+              "  pm.test('conserva todo lo escrito en los pasos', () => {",
+              "    pm.expect(p.company).to.eql('Patio Delivery');",
+              "    pm.expect(p.phone_number).to.eql('70012345');",
+              "    pm.expect(p.email).to.eql('prueba@teleinfo.test');",
+              "  });",
+              "}"
+            ]}
+          }]
+        }
+      ]
+    }
+  ]
+}

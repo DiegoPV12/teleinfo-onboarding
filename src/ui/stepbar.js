@@ -1,12 +1,15 @@
-import { STEPS, stepIndex } from '../steps.js';
 import { store } from '../store.js';
 
 /**
  * Stepper. Es la única referencia de "dónde estoy" en un flujo estricto, así
  * que lleva número y nombre: no basta con una barra fina.
+ *
+ * Se dibuja sobre los pasos que ESTA sesión va a recorrer: si el registro a
+ * mano se salta las fotos, el visitante ve tres pasos y no cuatro con uno
+ * inalcanzable al final.
  */
 export function renderStepBar(el) {
-  el.innerHTML = STEPS.map((s, i) => {
+  el.innerHTML = store.activeSteps().map((s, i) => {
     const token = s.kind === 'photos' ? 'photos' : s.fields[0];
     return `
       <s data-step="${s.id}" style="--c:var(--c-${token})">
@@ -22,7 +25,7 @@ export function renderStepBar(el) {
 }
 
 export function paintStepBar(el, currentId) {
-  const at = stepIndex(currentId);
+  const at = store.activeSteps().findIndex((s) => s.id === currentId);
   el.querySelectorAll('s').forEach((seg, i) => {
     const done = store.isVerified(seg.dataset.step);
     seg.classList.toggle('done', done);
@@ -31,4 +34,8 @@ export function paintStepBar(el, currentId) {
   });
 }
 
-export const stepLabel = (id) => `Paso ${stepIndex(id) + 1} de ${STEPS.length}`;
+export const stepLabel = (id) => {
+  const list = store.activeSteps();
+  const at = list.findIndex((s) => s.id === id);
+  return `Paso ${at + 1} de ${list.length}`;
+};
