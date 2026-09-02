@@ -1,5 +1,5 @@
 import { TIMING } from '../config.js';
-import { STEP_BY_ID } from '../steps.js';
+import { PHOTOS_ID, STEP_BY_ID } from '../steps.js';
 import { store } from '../store.js';
 import { buzz, HAPTICS } from '../haptics.js';
 import { createTimers } from '../timers.js';
@@ -7,7 +7,7 @@ import { typeText } from '../ui/typewriter.js';
 import { poseGuide } from '../ui/pose.js';
 import { renderStepBar, paintStepBar, stepLabel } from '../ui/stepbar.js';
 
-const STEP = STEP_BY_ID.photos;
+const STEP = STEP_BY_ID[PHOTOS_ID];
 
 /**
  * Paso 4 · las tres tomas.
@@ -86,8 +86,8 @@ export function createPhotosScene({ session }) {
     refs.listen.textContent = pending
       ? pending.hint
       : 'Revise las tres tomas y confirme';
-    refs.verify.disabled = !store.canVerify('photos');
-    paintStepBar(refs.bar, 'photos');
+    refs.verify.disabled = !store.canVerify(STEP.id);
+    paintStepBar(refs.bar, STEP.id);
   }
 
   return {
@@ -104,11 +104,11 @@ export function createPhotosScene({ session }) {
 
       renderStepBar(refs.bar);
       renderShots(refs.shots);
-      refs.eyebrow.textContent = stepLabel('photos');
+      refs.eyebrow.textContent = stepLabel(STEP.id);
 
       refs.verify.onclick = () => {
         buzz(HAPTICS.confirm);
-        session.verifyStep('photos');
+        session.verifyStep(STEP.id);
       };
       refs.back.onclick = () => { buzz(HAPTICS.tap); session.back(); };
 

@@ -10,7 +10,7 @@ import { store } from '../store.js';
  */
 export function renderStepBar(el) {
   el.innerHTML = store.activeSteps().map((s, i) => {
-    const token = s.kind === 'photos' ? 'photos' : s.fields[0];
+    const token = s.kind === 'photos' ? 'photos' : (s.fields[0] ?? s.kind ?? s.id);
     return `
       <s data-step="${s.id}" style="--c:var(--c-${token})">
         <b class="n">

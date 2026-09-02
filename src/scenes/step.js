@@ -134,7 +134,7 @@ export function createStepScene({ session }) {
       // El paso puede cambiar sin salir de esta escena: lo hace el backend.
       off = store.subscribe((event) => {
         const next = store.currentStep();
-        if (!next || next.kind === 'photos') return;
+        if (!next || next.kind === 'photos' || next.kind === 'done') return;
         if (next.id !== stepId) build(next);
         else paint({ landed: event.type === 'sync' ? event.keys : [] });
       });

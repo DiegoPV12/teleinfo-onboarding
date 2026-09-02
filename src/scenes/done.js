@@ -13,6 +13,10 @@ export function createDoneScene({ session }) {
 
   return {
     mount({ el }) {
+      // Paso 5: cerrar el registro (encola la impresión). No hay campos que
+      // guardar; verificarlo dispara complete() en la sesión.
+      session.verifyStep();
+
       const data = store.all();
       const nameEl = el.querySelector('[data-el="doneName"]');
       const ledeEl = el.querySelector('[data-el="doneLede"]');

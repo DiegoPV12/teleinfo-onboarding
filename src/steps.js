@@ -1,18 +1,19 @@
 import { FIELDS } from './config.js';
 
 /**
- * Los cuatro pasos del registro.
+ * Los pasos del registro. El `id` es numérico porque viaja como `step` a
+ * `POST /api/audios-totem`, que solo acepta números.
  */
 export const STEPS = [
   {
-    id: 'identity',
+    id: '1',
     short: 'Identidad',
     title: 'Cuénteme quién es.',
     hint: 'Diga su nombre y apellido al avatar, o escríbalos aquí.',
     fields: ['nombre', 'apellido']
   },
   {
-    id: 'work',
+    id: '2',
     short: 'Trabajo',
     title: '¿Dónde trabaja?',
     hint: '',
@@ -20,14 +21,14 @@ export const STEPS = [
     optional: true
   },
   {
-    id: 'contact',
+    id: '3',
     short: 'Contacto',
     title: '¿Cómo lo contactamos?',
     hint: 'Revise que el teléfono y el correo estén bien escritos.',
     fields: ['telefono', 'email']
   },
   {
-    id: 'photos',
+    id: '4',
     short: 'Fotos',
     kind: 'photos',
     title: 'Tomemos tres fotos.',
@@ -37,11 +38,22 @@ export const STEPS = [
       { id: 'left',  label: 'Perfil izquierdo', hint: 'Gire la cabeza a su izquierda' },
       { id: 'right', label: 'Perfil derecho',   hint: 'Gire la cabeza a su derecha' }
     ]
+  },
+  {
+    id: '5',
+    short: 'Completado',
+    kind: 'done',
+    title: 'Registro completado',
+    hint: 'Gracias por registrarse.',
+    fields: []
   }
 ];
 
 export const STEP_IDS = STEPS.map((s) => s.id);
 export const STEP_BY_ID = Object.fromEntries(STEPS.map((s) => [s.id, s]));
+
+/** Id del paso de fotos, resuelto por `kind` para no atarlo al número. */
+export const PHOTOS_ID = STEPS.find((s) => s.kind === 'photos')?.id;
 
 export function stepIndex(id) {
   return STEP_IDS.indexOf(id);

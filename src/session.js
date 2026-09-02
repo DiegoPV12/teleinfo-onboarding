@@ -1,5 +1,5 @@
 import { API, SKIP_PHOTOS, START_MODE, TIMING, TRANSPORT, WATCHES_TOTEM } from './config.js';
-import { STEP_BY_ID } from './steps.js';
+import { PHOTOS_ID, STEP_BY_ID } from './steps.js';
 import { createClient, ApiError } from './api/client.js';
 import { createPoller } from './poll.js';
 import { log } from './log.js';
@@ -54,7 +54,9 @@ export function createSession({ onScene, onStatus } = {}) {
     if (!started) return 'welcome';
     const step = store.currentStep();
     if (!step) return 'done';
-    return step.kind === 'photos' ? 'photos' : 'step';
+    if (step.kind === 'photos') return 'photos';
+    if (step.kind === 'done') return 'done';
+    return 'step';
   }
 
   function settle() {
@@ -196,7 +198,7 @@ export function createSession({ onScene, onStatus } = {}) {
       personId = incoming;
       adopted = true;
       started = true;         // detectada: el formulario se abre solo
-      if (SKIP_PHOTOS) store.skip('photos');
+      if (SKIP_PHOTOS) store.skip(PHOTOS_ID);
       log.session(`persona adoptada del tótem · ${incoming}`, {
         nombre: [state.fields?.nombre?.value, state.fields?.apellido?.value]
           .filter(Boolean).join(' ') || '(vacío: desconocido)',
@@ -346,7 +348,7 @@ export function createSession({ onScene, onStatus } = {}) {
       started = true;
       // Sin avatar no hay quien tome las fotos: en el camino a mano el paso se
       // quita antes de dibujar nada, para que el stepper cuente los que hay.
-      if (SKIP_PHOTOS && store.skip('photos')) {
+      if (SKIP_PHOTOS && store.skip(PHOTOS_ID)) {
         log.session('registro a mano: se salta el paso de fotos');
       }
       log.session('entrada a mano por el slider');
