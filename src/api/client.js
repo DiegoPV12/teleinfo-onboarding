@@ -2,7 +2,7 @@ import { API, TRANSPORT } from '../config.js';
 import { log } from '../log.js';
 import { createHttpTransport } from './http.js';
 import { createLocalTransport } from './local.js';
-import { createRequest, finishPayload, patchPayload, personIdOf, readPerson, stepPayload } from './contract.js';
+import { createRequest, finishPayload, patchPayload, personIdOf, readPerson, stepAudioPayload, stepPayload } from './contract.js';
 
 export class ApiError extends Error {
   constructor(status, message) {
@@ -109,14 +109,14 @@ export function createClient({ transport = TRANSPORT } = {}) {
     },
 
     /**
-     * Pide el siguiente audio pendiente del tótem. Devuelve el audio, `null`
-     * si la cola está vacía (404) y `false` si no hay code en la URL.
+     * Encola el audio del paso para que el tótem lo reproduzca. Devuelve
+     * `true` si se encoló, `null` si la central lo rechazó y `false` si no
+     * hay code del tótem en la URL.
      */
-    async notifyStep() {
+    async notifyStep(stepId) {
       if (!API.totem) return false;
-      const res = await t.notifyStep(API.totem);
-      if (res.status >= 400) return null;
-      return res.body ?? null;
+      const res = await t.notifyStep(stepAudioPayload(stepId, API.totem));
+      return res.status < 300 ? true : null;
     },
 
     photoUrl: (personId, sampleId) => t.photoUrl(personId, sampleId),

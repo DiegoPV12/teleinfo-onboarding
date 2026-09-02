@@ -90,14 +90,14 @@ export function createSession({ onScene, onStatus } = {}) {
     const current = store.currentStep();
     if (!current || current.id === notifiedStep) return;
     notifiedStep = current.id;
-    client.notifyStep().then((audio) => {
-      if (audio === false) {
-        log.change('totem-event', 'sin-code', () =>
-          log.poll('aviso de paso: falta el code del tótem en la URL'));
-      } else if (!audio) {
-        log.poll(`aviso de paso → ${current.id}: sin audios pendientes`);
+    client.notifyStep(current.id).then((queued) => {
+      if (queued === false) {
+        log.change('totem-audio', 'sin-code', () =>
+          log.poll('audio de paso: falta el code del tótem en la URL'));
+      } else if (!queued) {
+        log.poll(`audio de paso → ${current.id}: la central lo rechazó`);
       } else {
-        log.ok(`aviso de paso → ${current.id}: ${audio.name} · step "${audio.step}"`);
+        log.ok(`audio de paso → ${current.id}: encolado`);
       }
     }).catch(() => {});
   }

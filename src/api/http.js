@@ -1,6 +1,6 @@
 import { API } from '../config.js';
 import { log } from '../log.js';
-import { currentPersonPath, nextAudioPath } from './contract.js';
+import { currentPersonPath, AUDIO_TOTEM_PATH } from './contract.js';
 
 /**
  * Transporte real contra la central (rt-face-recognition).
@@ -93,8 +93,8 @@ export function createHttpTransport() {
     patchPerson: (personId, body) =>
       send(`/api/persons/${personId}`, { method: 'PATCH', body }),
 
-    notifyStep: (totemCode) =>
-      send(nextAudioPath(totemCode), { method: 'POST', quiet: true }),
+    notifyStep: (body) =>
+      send(AUDIO_TOTEM_PATH, { method: 'POST', body, quiet: true }),
 
     createPerson: ({ path, body, idempotent }) =>
       send(path, {

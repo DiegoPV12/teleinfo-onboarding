@@ -196,12 +196,15 @@ export function finishPayload() {
 }
 
 /**
- * Siguiente audio pendiente del tótem. `POST /api/audios-totem/by-code/{code}/next`
- * sin cuerpo ni query: el code viaja en la ruta. Un `404` es la respuesta
- * normal cuando la cola está vacía (o el code no existe), no un error.
+ * Encola el audio del paso para que el tótem lo reproduzca.
+ * `POST /api/audios-totem` con { totem_code, step, gender: null }. 201 al
+ * crear; 422 si falta totem_code o step; 503 si la administración de tótems
+ * está deshabilitada. El tótem lo consume aparte con .../by-code/<code>/next.
  */
-export const nextAudioPath = (totemCode) =>
-  `/api/audios-totem/by-code/${encodeURIComponent(totemCode)}/next`;
+export const AUDIO_TOTEM_PATH = '/api/audios-totem';
+
+export const stepAudioPayload = (stepId, totemCode) =>
+  ({ totem_code: totemCode, step: stepId, gender: null });
 
 /** Los campos de un paso, listos para PATCH. */
 export function stepPayload(stepId, read) {

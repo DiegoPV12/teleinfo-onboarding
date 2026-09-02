@@ -78,8 +78,11 @@ function build() {
       return { status: 200, body: { items: person.photos, total: person.photos.length } };
     },
 
-    async notifyStep() {
-      return { status: 404, body: { detail: 'El tótem no tiene audios pendientes.' } };
+    async notifyStep(body) {
+      return {
+        status: 201,
+        body: { totem_code: body?.totem_code ?? '', name: '', gender: 0, step: body?.step ?? '', read: 0, created_at: new Date().toISOString() }
+      };
     },
 
     /** PATCH parcial: lo omitido no se toca, el string vacío borra. */
