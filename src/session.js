@@ -196,6 +196,7 @@ export function createSession({ onScene, onStatus } = {}) {
       personId = incoming;
       adopted = true;
       started = true;         // detectada: el formulario se abre solo
+      if (SKIP_PHOTOS) store.skip('photos');
       log.session(`persona adoptada del tótem · ${incoming}`, {
         nombre: [state.fields?.nombre?.value, state.fields?.apellido?.value]
           .filter(Boolean).join(' ') || '(vacío: desconocido)',
