@@ -2,8 +2,8 @@
 :root {
   --paper: #FFFFFF;
   --ink: #000000;
-  --ink-2: #6E6E73;
-  --ink-3: #AEAEB2;
+  --ink-2: #5A5A60;
+  --ink-3: #86868B;
   --hair: #E6E6E9;
 
   --c-nombre: #007AFF;
@@ -12,12 +12,40 @@
   --c-cargo: #FF2D55;
   --c-telefono: #FF9500;
   --c-email: #34C759;
+  --c-photos: #30D9C8;
+
+  --c-shot-front: #007AFF;
+  --c-shot-left: #AF52DE;
+  --c-shot-right: #FF9500;
+
+  --bad: #FF3B30;
 
   --ai: linear-gradient(90deg, #007AFF 0%, #5856D6 20%, #AF52DE 40%, #FF2D55 60%, #FF9500 80%, #34C759 100%);
   --ai-loop: linear-gradient(90deg, #007AFF, #5856D6, #AF52DE, #FF2D55, #FF9500, #34C759, #30D9C8, #007AFF);
 
-  --track-w: min(620px, 80vw);
+  --track-w: min(460px, 62vw);
   --ease: cubic-bezier(.22, 1, .36, 1);
+
+  /* ------------------------------------------------------------------
+     RITMO VERTICAL DE LOS PASOS  ·  toque estos seis valores y nada más
+     ------------------------------------------------------------------
+     Gobiernan la altura del título y la separación de los campos en los
+     cuatro pasos. Suba --step-top para bajar todo el bloque; suba
+     --step-gap para separar los campos del título.                     */
+
+  /* aire sobre el "PASO n de 4" — sube o baja todo el contenido */
+  --step-top: clamp(72px, 1.5vh, 18px);
+  /* bajo el stepper, antes del título */
+  --step-head-gap: clamp(16px, 2.6vh, 32px);
+  /* entre el "PASO n de 4" y el título */
+  --step-eyebrow-gap: clamp(10px, 1.4vh, 16px);
+  /* entre el título y los campos (o las tomas del paso 4) */
+  --step-gap: clamp(40px, 7vh, 84px);
+  /* entre filas y entre columnas del formulario */
+  --field-gap-y: clamp(24px, 3vh, 36px);
+  --field-gap-x: clamp(32px, 5vw, 80px);
+  /* el paso 4 va aparte: cada píxel aquí se lo quita de alto a las fotos */
+  --shots-gap: clamp(14px, 2vh, 26px);
 
 
   --font: "Neue Haas Grotesk Display Pro", "NeueHaasDisplay", "Neue Haas Grotesk Text Pro",

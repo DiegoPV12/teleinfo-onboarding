@@ -15,91 +15,86 @@
     <s class="b1"></s><s class="b2"></s><s class="b3"></s><s class="b4"></s>
   </div>
 
+  <div class="link" data-el="link" hidden>
+    <s></s><span data-el="linkTxt">Reconectando</span>
+  </div>
+
   <main class="stage">
 
     <!-- 1 · BIENVENIDA -->
-    <section class="scene" data-scene="welcome">
+    <section class="scene center" data-scene="welcome">
+      <div class="head fade" data-el="welcomeHead">
+        <div class="listen show live wait">
+          <div class="orb"><i></i><b></b></div>
+          <p data-el="waitTxt">Esperando a que alguien se acerque</p>
+        </div>
+      </div>
       <div class="body">
         <h1 class="hero"><em data-el="heroLine1"></em><em data-el="heroLine2"></em></h1>
         <p class="lede" data-el="lede"></p>
-      </div>
-      <div class="foot fade" data-el="welcomeFoot">
-        <div class="slider" data-el="slider" role="button" tabindex="0" aria-label="Deslice para comenzar">
-          <div class="glow"></div>
-          <div class="fill"><i></i><div class="sheen"></div></div>
-          <div class="lbl">Deslice para comenzar</div>
-          <div class="knob">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
-              <path d="M5 12h13M13 6l6 6-6 6"/>
-            </svg>
+        <!-- Respaldo: si la detección falla, se entra a mano -->
+        <div class="fallback" data-el="fallback">
+          <div class="slider" data-el="slider" role="button" tabindex="0" aria-label="Deslice para comenzar">
+            <div class="glow"></div>
+            <div class="fill"><i></i><div class="sheen"></div></div>
+            <div class="lbl">Deslice para comenzar</div>
+            <div class="knob">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M5 12h13M13 6l6 6-6 6"/>
+              </svg>
+            </div>
           </div>
         </div>
       </div>
     </section>
 
-    <!-- 2 · GUIA -->
-    <section class="scene" data-scene="guide">
-      <div class="listen show">
-        <div class="orb"><i></i><b></b></div>
-        <p>Mire al avatar y cuéntele todo de una vez</p>
-        <span class="chev">
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-            <path d="M12 19V5M6 11l6-6 6 6"/>
-          </svg>
-        </span>
-      </div>
-      <div class="body">
-        <p class="eyebrow" data-el="eyebrow">Puede decirlo así:</p>
-        <p class="phrase" data-el="phrase"></p>
-        <div class="legend" data-el="legend"></div>
-      </div>
-      <div class="foot">
-        <p class="count">En el orden que prefiera. Si falta algún dato, el avatar se lo pedirá.</p>
-        <button class="btn" data-go="capture">Estoy listo</button>
-      </div>
-    </section>
-
-    <!-- 3 · CAPTURA -->
-    <section class="scene" data-scene="capture">
-      <div class="listen show live">
-        <div class="orb"><i></i><b></b></div>
-        <p data-el="listenTxt">Le escucho</p>
-      </div>
-      <div class="body">
-        <h2 class="title" data-el="captureTitle">Cuénteme quién es.</h2>
-        <div class="grid" data-el="grid"></div>
-        <p class="script" data-el="script"></p>
-      </div>
-      <div class="foot">
-        <div class="progress">
-          <div class="segs" data-el="segs"></div>
-          <span class="count" data-el="count">0 de 6</span>
+    <!-- 2 · PASO (identidad · trabajo · contacto) -->
+    <section class="scene" data-scene="step">
+      <div class="head">
+        <div class="steps" data-el="stepBar"></div>
+        <div class="listen show live">
+          <div class="orb"><i></i><b></b></div>
+          <p data-el="stepListen">Le escucho</p>
         </div>
-        <button class="btn ghost" data-go="confirm">Prefiero escribirlo</button>
-      </div>
-    </section>
-
-    <!-- 4 · CONFIRMACION -->
-    <section class="scene" data-scene="confirm">
-      <div class="listen show">
-        <div class="orb"><i></i><b></b></div>
-        <p>Corrija lo que haga falta, aquí o hablando</p>
       </div>
       <div class="body">
-        <h2 class="title" data-el="confirmTitle">¿Está todo correcto?</h2>
-        <div class="form" data-el="form"></div>
+        <p class="eyebrow" data-el="stepEyebrow"></p>
+        <h2 class="title" data-el="stepTitle"></h2>
+        <div class="form" data-el="stepForm"></div>
+        <button class="btn line" data-el="stepSkip" hidden>Prefiero omitir estos datos</button>
+        <p class="note" data-el="stepHint"></p>
       </div>
       <div class="foot">
-        <button class="btn ghost" data-go="capture">Corregir hablando</button>
-        <button class="btn" data-el="confirmBtn">Confirmar registro</button>
+        <button class="btn ghost" data-el="stepCancel">Cancelar registro</button>
+        <button class="btn" data-el="stepVerify">Verificar</button>
       </div>
     </section>
 
-    <!-- 5 · LISTO -->
+    <!-- 3 · FOTOS -->
+    <section class="scene" data-scene="photos">
+      <div class="head">
+        <div class="steps" data-el="photoBar"></div>
+        <div class="listen show live">
+          <div class="orb"><i></i><b></b></div>
+          <p data-el="photoListen">Colóquese frente a la cámara</p>
+        </div>
+      </div>
+      <div class="body">
+        <p class="eyebrow" data-el="photoEyebrow"></p>
+        <h2 class="title" data-el="photoTitle"></h2>
+        <div class="shots" data-el="shots"></div>
+      </div>
+      <div class="foot">
+        <button class="btn ghost" data-el="photoCancel">Cancelar registro</button>
+        <button class="btn" data-el="photoVerify">Confirmar fotos</button>
+      </div>
+    </section>
+
+    <!-- 4 · LISTO -->
     <section class="scene" data-scene="done">
       <div class="body">
         <h2 class="hero"><em data-el="doneName">Listo.</em></h2>
-        <p class="lede" data-el="doneLede">Su registro está confirmado. Retire su credencial en el mostrador.</p>
+        <p class="lede" data-el="doneLede"></p>
         <div class="badge">
           <b data-el="doneFull">—</b>
           <span data-el="doneRole">—</span>
@@ -107,23 +102,11 @@
         </div>
       </div>
       <div class="foot">
-        <div class="ring"><s></s><span>Volviendo al inicio</span></div>
-        <button class="btn ghost" data-go="welcome">Registrar a otra persona</button>
+        <div class="ring"><s></s><span>Imprimiendo su credencial</span></div>
       </div>
     </section>
 
   </main>
-
-  <div class="demo" data-el="demo" hidden>
-    <em>demo</em>
-    <button data-go="welcome">1</button>
-    <button data-go="guide">2</button>
-    <button data-go="capture">3</button>
-    <button data-go="confirm">4</button>
-    <button data-go="done">5</button>
-    <button class="pri" data-el="simBtn">Simular voz</button>
-    <button data-el="resetBtn">Reset</button>
-  </div>
 
   <script type="module" src="/src/main.js"></script>
 </body>

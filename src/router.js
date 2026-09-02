@@ -2,10 +2,13 @@ import { TIMING } from './config.js';
 import { createTimers } from './timers.js';
 
 /**
- * Router de escenas. Cada escena expone { mount(ctx), unmount() } y recibe
- * su propio <section data-scene>. Solo una escena está montada a la vez.
+ * Router de escenas. Cada escena expone { mount(ctx), unmount() } y recibe su
+ * propio <section data-scene>. Solo una escena está montada a la vez.
+ *
+ * A diferencia de la versión anterior no hay orden ni botones de navegación:
+ * la escena la decide `session.derive()` a partir del estado del tótem.
  */
-export function createRouter(scenes, initial) {
+export function createRouter(scenes) {
   const timers = createTimers();
   const nodes = new Map(
     [...document.querySelectorAll('.scene')].map((el) => [el.dataset.scene, el])
@@ -29,15 +32,8 @@ export function createRouter(scenes, initial) {
     document.body.dataset.scene = name;
     const el = nodes.get(name);
     timers.after(() => el.classList.add('on'), prev ? TIMING.sceneIn : 0);
-    scenes[name]?.mount?.({ el, go, router });
+    scenes[name]?.mount?.({ el, go });
   }
 
-  const router = { go, get current() { return current; } };
-
-  document.querySelectorAll('[data-go]').forEach((btn) => {
-    btn.addEventListener('click', () => go(btn.dataset.go));
-  });
-
-  go(initial);
-  return router;
+  return { go, get current() { return current; } };
 }

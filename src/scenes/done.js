@@ -3,25 +3,30 @@ import { store } from '../store.js';
 import { createTimers } from '../timers.js';
 import { typeText } from '../ui/typewriter.js';
 
-export function createDoneScene() {
+/**
+ * Registro completo. La impresión de la credencial corre por cuenta del
+ * backend; aquí solo se confirma y se espera a que el tótem cierre la sesión
+ * (el sondeo devolverá 204 y la pantalla volverá sola a la bienvenida).
+ */
+export function createDoneScene({ session }) {
   const timers = createTimers();
 
   return {
-    mount({ el, go }) {
+    mount({ el }) {
       const data = store.all();
       const nameEl = el.querySelector('[data-el="doneName"]');
       const ledeEl = el.querySelector('[data-el="doneLede"]');
 
       el.querySelector('[data-el="doneFull"]').textContent =
-        [data.nombre, data.apellido].filter(Boolean).join(' ');
+        [data.nombre, data.apellido].filter(Boolean).join(' ') || '—';
       el.querySelector('[data-el="doneRole"]').textContent =
-        [data.cargo, data.empresa].filter(Boolean).join(' · ');
+        [data.cargo, data.empresa].filter(Boolean).join(' · ') || '—';
 
       nameEl.textContent = '';
       ledeEl.textContent = '';
 
       timers.after(() => {
-        typeText(nameEl, `Listo, ${data.nombre ?? ''}.`, {
+        typeText(nameEl, data.nombre ? `Listo, ${data.nombre}.` : 'Listo.', {
           cps: TIMING.heroCps,
           timers,
           onDone: () => timers.after(() => {
@@ -30,9 +35,10 @@ export function createDoneScene() {
         });
       }, 200);
 
-      // Reinicio por inactividad: el kiosco siempre vuelve solo a la bienvenida.
-      timers.after(() => go('welcome'), TIMING.idleReset);
+      // Cierre del flujo: se avisa una sola vez al entrar.
+      session.confirmFinal();
     },
+
     unmount() {
       timers.clear();
     }
