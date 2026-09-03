@@ -25,7 +25,9 @@ export const FIELDS = [
   { key: 'cargo',    label: 'Cargo',    ghost: 'Cargo',    step: '2' },
   { key: 'empresa',  label: 'Empresa',  ghost: 'Empresa',  step: '2' },
   { key: 'telefono', label: 'Teléfono', ghost: 'Teléfono', step: '3', inputMode: 'tel' },
-  { key: 'email',    label: 'Email',    ghost: 'Correo',   step: '3', type: 'email' }
+  // Sin `type="email"`: ese tipo no soporta setRangeText/selectionStart y rompe
+  // el teclado en pantalla. El correo se valida en validate.js igual.
+  { key: 'email',    label: 'Email',    ghost: 'Correo',   step: '3', inputMode: 'email' }
 ];
 
 export const FIELD_BY_KEY = Object.fromEntries(FIELDS.map((f) => [f.key, f]));

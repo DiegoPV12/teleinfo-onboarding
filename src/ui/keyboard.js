@@ -95,12 +95,33 @@ function build() {
    * `setRangeText` mantiene el historial de deshacer del navegador, cosa que
    * asignar `.value` a pelo rompe.
    */
+  /**
+   * `setRangeText`/`selectionStart` solo existen en inputs `text`, `search`,
+   * `tel`, `url` y `password`; en otros tipos lanzan. Si eso pasa, se cae a
+   * empalmar `.value` a pelo — se pierde el historial de deshacer, pero al
+   * menos la tecla escribe.
+   */
+  function splice(from, to, text) {
+    if (!input) return;
+    const hasRange =
+      input.selectionStart !== null && typeof input.setRangeText === 'function';
+    if (hasRange) {
+      try {
+        input.setRangeText(text, from, to, 'end');
+        input.dispatchEvent(new Event('input', { bubbles: true }));
+        return;
+      } catch { /* tipo sin selección: sigue el plan B */ }
+    }
+    const v = input.value;
+    input.value = v.slice(0, from) + text + v.slice(to);
+    input.dispatchEvent(new Event('input', { bubbles: true }));
+  }
+
   function type(text) {
     if (!input) return;
     const start = input.selectionStart ?? input.value.length;
     const end = input.selectionEnd ?? start;
-    input.setRangeText(text, start, end, 'end');
-    input.dispatchEvent(new Event('input', { bubbles: true }));
+    splice(start, end, text);
   }
 
   function backspace() {
@@ -108,9 +129,8 @@ function build() {
     const start = input.selectionStart ?? input.value.length;
     const end = input.selectionEnd ?? start;
     if (start === end && start === 0) return;
-    if (start === end) input.setRangeText('', start - 1, end, 'end');
-    else input.setRangeText('', start, end, 'end');
-    input.dispatchEvent(new Event('input', { bubbles: true }));
+    if (start === end) splice(start - 1, end, '');
+    else splice(start, end, '');
   }
 
   /** Enter salta al siguiente campo del paso; en el último, cierra. */
